@@ -208,9 +208,13 @@ func New(plStore *model.PlaylistStore) App {
 	sess := model.LoadSession()
 	// Default settings to true for new sessions (Go zero value is false).
 	if !sessionExists {
+		sess.Autoplay = true
+		sess.Shuffle = true
+		sess.ShowHistory = true
 		sess.ShowRadio = true
 		sess.PinRadio = true
 		sess.AutoFocusQueue = true
+		sess.RelNumbers = true
 	}
 
 	sm := newSearchModel()
