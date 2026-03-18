@@ -21,8 +21,8 @@ go install github.com/Sadoaz/vimyt@latest
 Or build from source:
 
 ```bash
-git clone https://github.com/Sadoaz/vimyt-old.git
-cd vimyt-old
+git clone https://github.com/Sadoaz/vimyt.git
+cd vimyt
 go build -o vimyt .
 ```
 
@@ -100,7 +100,7 @@ Press `S` to open settings:
 
 ## Data Storage
 
-Stored in `~/.config/vimyt/`:
+Everything is stored locally on disk in `~/.config/vimyt/`:
 
 ```
 ~/.config/vimyt/
