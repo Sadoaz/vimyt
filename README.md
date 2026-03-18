@@ -4,6 +4,13 @@ TUI for YouTube Music with vim keybindings and radio mixes. Built with Go, [Bubb
 
 Search, queue, playlists, radio mixes, and history. All navigated with vim keybindings (`j/k`, `gg/G`, visual select, yank/delete/paste, undo/redo). Session state persists across launches.
 
+Demo:
+
+
+
+https://github.com/user-attachments/assets/7719af94-4268-44dc-8ae1-32e5420bd23c
+
+
 ## Prerequisites
 
 - [Go](https://go.dev/) 1.25+
