@@ -212,7 +212,6 @@ func New(plStore *model.PlaylistStore) App {
 		sess.Shuffle = true
 		sess.ShowHistory = true
 		sess.ShowRadio = true
-		sess.PinRadio = true
 		sess.AutoFocusQueue = true
 		sess.RelNumbers = true
 	}
