@@ -119,7 +119,7 @@ Press `S` to open settings:
 
 ## Data Storage
 
-Everything is stored locally on disk. Location depends on your OS:
+Only metadata is stored locally. No audio or video is downloaded. Location depends on your OS:
 
 - **macOS**: `~/Library/Application Support/vimyt/`
 - **Linux**: `~/.config/vimyt/`
