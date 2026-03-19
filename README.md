@@ -21,6 +21,8 @@ https://github.com/user-attachments/assets/7719af94-4268-44dc-8ae1-32e5420bd23c
 
 ## Installation
 
+### Go install
+
 Make sure `$GOPATH/bin` is in your `PATH`:
 
 ```bash
@@ -35,19 +37,15 @@ Then run:
 
 ```bash
 go install github.com/Sadoaz/vimyt@latest
+vimyt
 ```
 
-Or build from source:
+### From source
 
 ```bash
 git clone https://github.com/Sadoaz/vimyt.git
 cd vimyt
 go build -o vimyt .
-```
-
-## Usage
-
-```bash
 ./vimyt
 ```
 
