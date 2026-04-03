@@ -674,6 +674,21 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	// Randomize queue order (R)
+	case key.Matches(msg, keys.Randomize):
+		if a.focusedPanel == panelQueue && a.qdata.Len() > 1 {
+			a.saveQueueUndo()
+			a.qdata.Shuffle()
+			a.queue.cursor = 0
+			a.queue.scroll = 0
+			a.queue.visual = false
+			a.queue.clearFilter()
+			a.shufflePlayed = nil
+			cmd := a.setStatus("Queue randomized")
+			return a, cmd
+		}
+		return a, nil
+
 	// Undo
 	case key.Matches(msg, keys.Undo):
 		if a.focusedPanel == panelRadioHist {

@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
@@ -155,6 +156,31 @@ func (q *Queue) ToggleSelect(i int) {
 
 // ClearSelection clears all selections.
 func (q *Queue) ClearSelection() {
+	q.Selected = make(map[int]bool)
+}
+
+// Shuffle randomizes the order of tracks in the queue.
+// The currently playing track (if any) stays at its position and
+// everything else is shuffled around it.
+func (q *Queue) Shuffle() {
+	n := len(q.Tracks)
+	if n < 2 {
+		return
+	}
+	// If a track is currently playing, move it to index 0 so
+	// it stays at a known position while we shuffle the rest.
+	if q.Current >= 0 && q.Current < n {
+		q.Tracks[0], q.Tracks[q.Current] = q.Tracks[q.Current], q.Tracks[0]
+		// Shuffle everything after position 0.
+		rand.Shuffle(n-1, func(i, j int) {
+			q.Tracks[i+1], q.Tracks[j+1] = q.Tracks[j+1], q.Tracks[i+1]
+		})
+		q.Current = 0
+	} else {
+		rand.Shuffle(n, func(i, j int) {
+			q.Tracks[i], q.Tracks[j] = q.Tracks[j], q.Tracks[i]
+		})
+	}
 	q.Selected = make(map[int]bool)
 }
 

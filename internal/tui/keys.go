@@ -60,6 +60,7 @@ type keyMap struct {
 	VolumeDown  key.Binding
 	JumpBack    key.Binding
 	JumpFwd     key.Binding
+	Randomize   key.Binding
 }
 
 var keys = keyMap{
@@ -290,6 +291,10 @@ var keys = keyMap{
 		key.WithKeys("ctrl+i", "tab"),
 		key.WithHelp("ctrl+i", "jump forward"),
 	),
+	Randomize: key.NewBinding(
+		key.WithKeys("R"),
+		key.WithHelp("R", "randomize queue"),
+	),
 }
 
 // helpEntry is a single row in the help overlay: key, action, description.
@@ -355,6 +360,7 @@ func helpSections() []helpSection {
 			{"p", "Paste", "paste from clipboard"},
 			{"M-k/M-j", "Move up/down", "reorder tracks in queue"},
 			{"C", "Clear queue", "remove all tracks from queue"},
+			{"R", "Randomize queue", "shuffle the order of tracks in queue"},
 		}},
 		{"Playlists & Tracks", []helpEntry{
 			{"a", "Add to playlist", "add track(s) to a playlist"},
