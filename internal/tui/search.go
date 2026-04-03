@@ -16,6 +16,7 @@ import (
 
 // searchResultMsg carries results back from async search.
 type searchResultMsg struct {
+	query  string
 	tracks []model.Track
 	err    error
 }
@@ -81,6 +82,10 @@ func (m searchModel) Update(msg tea.Msg) (searchModel, tea.Cmd) {
 			m.cursor = 0
 			m.visual = false
 			m.clearFilter()
+			// Persist to disk so session restore doesn't re-fetch from YouTube
+			if msg.query != "" && len(msg.tracks) > 0 {
+				model.SaveSearchCache(msg.query, msg.tracks)
+			}
 		}
 		// Return to normal mode so j/k navigate results
 		m.input.Blur()
@@ -192,7 +197,7 @@ func (m *searchModel) submit() tea.Cmd {
 		m.spinner.Tick,
 		func() tea.Msg {
 			tracks, err := youtube.Search(query)
-			return searchResultMsg{tracks: tracks, err: err}
+			return searchResultMsg{query: query, tracks: tracks, err: err}
 		},
 	)
 }

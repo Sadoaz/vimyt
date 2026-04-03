@@ -238,12 +238,13 @@ func New(plStore *model.PlaylistStore) App {
 		v = panelPlaylist
 	}
 
-	// Restore search state
+	// Restore search state from disk cache (avoids hitting YouTube on every launch)
 	if sess.SearchQuery != "" {
 		sm.input.SetValue(sess.SearchQuery)
-		// Re-run the search to populate results
-		tracks, _ := youtube.Search(sess.SearchQuery)
-		sm.results = tracks
+		if cached := model.LoadSearchCache(sess.SearchQuery); cached != nil {
+			sm.results = cached
+			sm.hasSearched = true
+		}
 		sm.cursor = sess.SearchCur
 		sm.cursor = min(sm.cursor, len(sm.results)-1)
 		sm.cursor = max(sm.cursor, 0)
