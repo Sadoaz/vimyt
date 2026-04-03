@@ -15,10 +15,15 @@ import (
 	"github.com/Sadoaz/vimyt/internal/model"
 )
 
+// maxSearchCacheSize caps the number of in-memory search cache entries.
+const maxSearchCacheSize = 50
+
 // searchCache stores results per query to avoid redundant yt-dlp calls.
 var (
-	searchMu    sync.RWMutex
-	searchCache = make(map[string][]model.Track)
+	searchMu       sync.RWMutex
+	searchCache    = make(map[string][]model.Track)
+	searchCacheAge = make(map[string]int64) // insertion order counter
+	searchCacheSeq int64                    // monotonic counter
 )
 
 // ytdlpResult is the JSON structure from yt-dlp --flat-playlist --dump-json.
@@ -100,9 +105,25 @@ func Search(query string) ([]model.Track, error) {
 		return nil, fmt.Errorf("yt-dlp search failed: %w", err)
 	}
 
-	// Cache results
+	// Cache results (evict oldest if at capacity)
 	searchMu.Lock()
+	if len(searchCache) >= maxSearchCacheSize {
+		var oldestKey string
+		var oldestSeq int64 = searchCacheSeq + 1
+		for k, seq := range searchCacheAge {
+			if seq < oldestSeq {
+				oldestSeq = seq
+				oldestKey = k
+			}
+		}
+		if oldestKey != "" {
+			delete(searchCache, oldestKey)
+			delete(searchCacheAge, oldestKey)
+		}
+	}
+	searchCacheSeq++
 	searchCache[query] = tracks
+	searchCacheAge[query] = searchCacheSeq
 	searchMu.Unlock()
 
 	return tracks, nil
@@ -174,9 +195,25 @@ func RadioMix(seed model.Track) ([]model.Track, error) {
 	result = append(result, seed)
 	result = append(result, pool...)
 
-	// Cache
+	// Cache (evict oldest if at capacity)
 	searchMu.Lock()
+	if len(searchCache) >= maxSearchCacheSize {
+		var oldestKey string
+		var oldestSeq int64 = searchCacheSeq + 1
+		for k, seq := range searchCacheAge {
+			if seq < oldestSeq {
+				oldestSeq = seq
+				oldestKey = k
+			}
+		}
+		if oldestKey != "" {
+			delete(searchCache, oldestKey)
+			delete(searchCacheAge, oldestKey)
+		}
+	}
+	searchCacheSeq++
 	searchCache[cacheKey] = result
+	searchCacheAge[cacheKey] = searchCacheSeq
 	searchMu.Unlock()
 
 	return result, nil
