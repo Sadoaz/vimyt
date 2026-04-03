@@ -408,6 +408,34 @@ func (a App) handleAddToPlaylist() (tea.Model, tea.Cmd) {
 		}
 
 	case panelPlaylist:
+		if a.playlist.level == levelList {
+			// List level: add all tracks from selected playlist(s) directly to queue
+			pls := a.playlist.visiblePlaylists()
+			if a.playlist.listVisual {
+				lo, hi := a.playlist.listAnchor, a.playlist.listCur
+				if lo > hi {
+					lo, hi = hi, lo
+				}
+				for i := lo; i <= hi && i < len(pls); i++ {
+					tracks = append(tracks, pls[i].Tracks...)
+				}
+				a.playlist.listVisual = false
+			} else if a.playlist.listCur < len(pls) {
+				tracks = append(tracks, pls[a.playlist.listCur].Tracks...)
+			}
+			if len(tracks) == 0 {
+				return a, nil
+			}
+			a.saveQueueUndo()
+			a.qdata.Add(tracks...)
+			a.queue.cursor = a.qdata.Len() - 1
+			var name string
+			if a.playlist.listCur < len(pls) {
+				name = pls[a.playlist.listCur].Name
+			}
+			cmd := a.setStatus(fmt.Sprintf("Added %d tracks from %s to queue", len(tracks), name))
+			return a, cmd
+		}
 		if a.playlist.level == levelDetail {
 			visible := a.playlist.visibleTracks()
 			if a.playlist.visual {

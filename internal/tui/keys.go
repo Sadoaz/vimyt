@@ -363,7 +363,7 @@ func helpSections() []helpSection {
 			{"R", "Randomize queue", "shuffle the order of tracks in queue"},
 		}},
 		{"Playlists & Tracks", []helpEntry{
-			{"a", "Add to playlist", "add track(s) to a playlist"},
+			{"a", "Add to playlist", "add track(s) to a playlist; on playlist list: add all to queue"},
 			{"o", "Create playlist", "new playlist (in playlist list)"},
 			{"c", "Goto current", "jump to currently playing track in queue"},
 			{"o", "Create playlist", "create new playlist (in playlist list view)"},
