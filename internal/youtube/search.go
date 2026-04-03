@@ -3,6 +3,8 @@ package youtube
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -50,7 +52,11 @@ func Search(query string) ([]model.Track, error) {
 		"--no-warnings",
 	}
 	args = append(args, CookieArgs()...)
-	cmd := exec.Command("yt-dlp", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -86,7 +92,13 @@ func Search(query string) ([]model.Track, error) {
 		})
 	}
 
-	_ = cmd.Wait()
+	if err := cmd.Wait(); err != nil && len(tracks) == 0 {
+		errMsg := strings.TrimSpace(stderrBuf.String())
+		if errMsg != "" {
+			return nil, fmt.Errorf("yt-dlp search failed: %s", errMsg)
+		}
+		return nil, fmt.Errorf("yt-dlp search failed: %w", err)
+	}
 
 	// Cache results
 	searchMu.Lock()
@@ -181,7 +193,11 @@ func fetchRadioPlaylist(videoID string) []model.Track {
 		"--playlist-end", "50",
 	}
 	args = append(args, CookieArgs()...)
-	cmd := exec.Command("yt-dlp", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -248,7 +264,11 @@ func FetchPlaylist(url string) (string, []model.Track, error) {
 		"--playlist-end", fmt.Sprintf("%d", maxImportTracks),
 	}
 	args = append(args, CookieArgs()...)
-	cmd := exec.Command("yt-dlp", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -291,7 +311,12 @@ func FetchPlaylist(url string) (string, []model.Track, error) {
 		})
 	}
 
-	_ = cmd.Wait()
+	if err := cmd.Wait(); err != nil && len(tracks) == 0 {
+		errMsg := strings.TrimSpace(stderrBuf.String())
+		if errMsg != "" {
+			return "", nil, fmt.Errorf("yt-dlp playlist fetch failed: %s", errMsg)
+		}
+	}
 
 	if len(tracks) == 0 {
 		if GetCookieBrowser() == "" {

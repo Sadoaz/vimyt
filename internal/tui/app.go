@@ -2,6 +2,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -114,8 +115,12 @@ type App struct {
 	settingsImporting   bool            // true when URL input is active in settings
 	settingsImportInput textinput.Model // text input for playlist URL
 	importingPlaylist   bool            // true while async import is running
-	// Prefetch: ID of the track whose URL is already being resolved ahead of time
-	prefetchedID string
+	// Prefetch: ID and queue index of the track whose URL is being resolved ahead of time.
+	// prefetchNextIdx is used by auto-advance so it plays the same track that was prefetched
+	// instead of re-rolling a different random pick.
+	prefetchedID    string
+	prefetchNextIdx int                // queue index of prefetched track, -1 if none
+	prefetchCancel  context.CancelFunc // cancels the in-flight prefetch goroutine
 	// Shuffle tracking: set of played track IDs to avoid repeats
 	shufflePlayed map[string]bool
 	// Play-back stack: queue indices of previously played tracks (for Shift+P)
@@ -301,6 +306,7 @@ func New(plStore *model.PlaylistStore) App {
 		relNumbers:           sess.RelNumbers,
 		autoFocusQueue:       sess.AutoFocusQueue,
 		cookieBrowser:        sess.CookieBrowser,
+		prefetchNextIdx:      -1,
 	}
 	// Apply cookie browser setting to youtube package
 	youtube.SetCookieBrowser(app.cookieBrowser)
@@ -347,28 +353,44 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The player detects EOF internally and transitions to Stopped.
 		status := a.player.Status()
 
-		// Auto-advance: if player stopped (track ended) and autoplay is enabled
+		// Auto-advance: if player stopped (track ended) and autoplay is enabled.
+		// Use the prefetched track index if available so we play the same track
+		// whose URL was already resolved, avoiding a redundant yt-dlp call.
 		if status.State == model.Stopped && status.Track != nil && a.autoplay {
 			if a.qdata.Len() > 0 {
 				a.pushPrev()
-				idx := a.pickNextTrack()
+				var idx int
+				if a.prefetchNextIdx >= 0 && a.prefetchNextIdx < a.qdata.Len() {
+					idx = a.prefetchNextIdx
+					// Keep shuffle state consistent — mark as played
+					if a.shuffle && a.shufflePlayed != nil {
+						a.shufflePlayed[a.qdata.Tracks[idx].ID] = true
+					}
+				} else {
+					idx = a.pickNextTrack()
+				}
 				a.qdata.Current = idx
 				a.playTrack(&a.qdata.Tracks[idx], "queue")
-				a.prefetchedID = "" // reset prefetch after advancing
+				a.cancelPrefetch() // reset prefetch after advancing
 			}
 		}
 
-		// Prefetch: resolve URL for next track ~15s before current ends
+		// Prefetch: resolve URL for next track ~15s before current ends.
+		// Only peek once per cycle — if prefetchedID is already set, a
+		// resolution is in flight and we don't re-peek (which with shuffle
+		// would return a different random track each tick, spawning
+		// duplicate yt-dlp processes).
 		if status.State == model.Playing && status.Track != nil && a.autoplay && a.qdata.Len() > 0 {
 			dur := status.Track.Duration
 			pos := status.Position
-			if dur > 0 && pos > 0 && dur-pos <= 15*time.Second {
+			if dur > 0 && pos > 0 && dur-pos <= 15*time.Second && a.prefetchedID == "" {
 				nextIdx := a.peekNextTrack()
 				nextTrack := a.qdata.Tracks[nextIdx]
-				if nextTrack.ID != a.prefetchedID {
-					a.prefetchedID = nextTrack.ID
-					go youtube.ResolveURL(nextTrack.ID)
-				}
+				a.prefetchedID = nextTrack.ID
+				a.prefetchNextIdx = nextIdx
+				ctx, cancel := context.WithCancel(context.Background())
+				a.prefetchCancel = cancel
+				go youtube.ResolveURLCtx(ctx, nextTrack.ID)
 			}
 		}
 		return a, playerTick()
@@ -418,7 +440,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.qdata.Add(msg.tracks...)
 		a.qdata.Current = 0
 		a.shufflePlayed = nil
-		a.prefetchedID = ""
+		a.cancelPrefetch()
 		if !seedPlaying {
 			a.playTrack(&a.qdata.Tracks[0], "radio")
 		}

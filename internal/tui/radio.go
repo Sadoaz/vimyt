@@ -99,7 +99,7 @@ func (a *App) radioHistRecover() tea.Cmd {
 	a.qdata.Add(entry.Tracks...)
 	a.qdata.Current = 0
 	a.shufflePlayed = nil
-	a.prefetchedID = ""
+	a.cancelPrefetch()
 	a.playTrack(&a.qdata.Tracks[0], "radio")
 	a.queue.cursor = 0
 	a.radioActive = true

@@ -2,10 +2,12 @@ package youtube
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 )
 
 // cookieBrowser holds the browser name for --cookies-from-browser (empty = disabled).
@@ -70,11 +72,17 @@ func (c *URLCache) Invalidate(id string) {
 // ResolveURL returns the audio stream URL for a YouTube video ID.
 // Checks cache first, falls back to yt-dlp subprocess.
 func ResolveURL(id string) (string, error) {
+	return ResolveURLCtx(context.Background(), id)
+}
+
+// ResolveURLCtx is like ResolveURL but accepts a context for cancellation.
+// When the context is cancelled, any in-flight yt-dlp process is killed.
+func ResolveURLCtx(ctx context.Context, id string) (string, error) {
 	if url := urlCache.Get(id); url != "" {
 		return url, nil
 	}
 
-	url, err := fetchAudioURL(id)
+	url, err := fetchAudioURL(ctx, id)
 	if err != nil {
 		return "", err
 	}
@@ -87,7 +95,7 @@ func InvalidateURL(id string) {
 	urlCache.Invalidate(id)
 }
 
-func fetchAudioURL(id string) (string, error) {
+func fetchAudioURL(parent context.Context, id string) (string, error) {
 	// Try formats in order: bestaudio, bestaudio*, best (fallback for videos without separate audio)
 	formats := []string{"bestaudio", "bestaudio*", "best"}
 
@@ -101,14 +109,21 @@ func fetchAudioURL(id string) (string, error) {
 	var lastErr error
 	for _, cookies := range cookieConfigs {
 		for _, f := range formats {
+			// Check if caller already cancelled before spawning another process
+			if err := parent.Err(); err != nil {
+				return "", fmt.Errorf("cancelled: %w", err)
+			}
+
 			args := []string{"-f", f, "--get-url", id, "--no-warnings", "--extractor-retries", "3"}
 			args = append(args, cookies...)
-			cmd := exec.Command("yt-dlp", args...)
+			ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+			cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 			var stdout, stderr bytes.Buffer
 			cmd.Stdout = &stdout
 			cmd.Stderr = &stderr
 
 			if err := cmd.Run(); err != nil {
+				cancel()
 				errMsg := strings.TrimSpace(stderr.String())
 				lastErr = fmt.Errorf("yt-dlp get-url failed for %s (format %s): %w (%s)", id, f, err, errMsg)
 				continue
@@ -116,9 +131,11 @@ func fetchAudioURL(id string) (string, error) {
 
 			url := strings.TrimSpace(stdout.String())
 			if url == "" {
+				cancel()
 				lastErr = fmt.Errorf("yt-dlp returned empty URL for %s (format %s)", id, f)
 				continue
 			}
+			cancel()
 			return url, nil
 		}
 	}

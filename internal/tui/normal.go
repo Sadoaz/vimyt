@@ -343,7 +343,7 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				a.player.Stop()
 			}
 		}
-		a.prefetchedID = "" // reset prefetch after manual skip
+		a.cancelPrefetch() // kill in-flight prefetch after manual skip
 		return a, nil
 
 	case key.Matches(msg, keys.Prev):
@@ -670,7 +670,7 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.queue.clearFilter()
 			a.radioActive = false
 			a.shufflePlayed = nil
-			a.prefetchedID = ""
+			a.cancelPrefetch()
 		}
 		return a, nil
 

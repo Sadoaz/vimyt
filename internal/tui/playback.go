@@ -166,8 +166,19 @@ func (a *App) playTrack(t *model.Track, source string) {
 	}
 }
 
+// cancelPrefetch cancels any in-flight prefetch and resets the prefetch state.
+func (a *App) cancelPrefetch() {
+	if a.prefetchCancel != nil {
+		a.prefetchCancel()
+		a.prefetchCancel = nil
+	}
+	a.prefetchedID = ""
+	a.prefetchNextIdx = -1
+}
+
 // quit saves session and cleans up before exiting.
 func (a *App) quit() {
+	a.cancelPrefetch()
 	a.saveSession()
 	_ = model.SaveQueue(a.qdata)
 	a.player.Close()

@@ -3,6 +3,7 @@ package player
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -35,6 +36,8 @@ type Player struct {
 	// Debounce: when Play() is called rapidly (e.g. spamming n/N),
 	// we delay the yt-dlp resolve so only the last skip actually hits YouTube.
 	debounceTimer *time.Timer
+	// resolveCancel cancels any in-flight yt-dlp URL resolution, killing the process.
+	resolveCancel context.CancelFunc
 }
 
 // ipcResponse is the JSON structure from mpv IPC.
@@ -162,19 +165,27 @@ func (p *Player) Play(t *model.Track) {
 		p.debounceTimer.Stop()
 	}
 
+	// Kill any in-flight yt-dlp process from a previous resolve
+	if p.resolveCancel != nil {
+		p.resolveCancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	p.resolveCancel = cancel
+
 	// Start a debounce timer — the actual resolve happens after the delay.
 	// If Play() is called again before the timer fires, this timer is
 	// stopped and replaced, so only the final track gets resolved.
 	p.debounceTimer = time.AfterFunc(playDebounce, func() {
-		p.resolveAndLoad(t, myGen)
+		p.resolveAndLoad(ctx, t, myGen)
 	})
 	p.mu.Unlock()
 }
 
 // resolveAndLoad does the actual yt-dlp URL resolution and mpv loading.
-// Called after the debounce timer fires.
-func (p *Player) resolveAndLoad(t *model.Track, myGen uint64) {
-	url, err := youtube.ResolveURL(t.ID)
+// Called after the debounce timer fires. The context allows cancellation
+// when the user skips to another track before resolution completes.
+func (p *Player) resolveAndLoad(ctx context.Context, t *model.Track, myGen uint64) {
+	url, err := youtube.ResolveURLCtx(ctx, t.ID)
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -187,6 +198,10 @@ func (p *Player) resolveAndLoad(t *model.Track, myGen uint64) {
 	p.resolving = false
 
 	if err != nil {
+		// Don't report cancellation as a playback error
+		if ctx.Err() != nil {
+			return
+		}
 		p.state = model.Stopped
 		p.track = nil // prevent autoplay from firing on failure
 		p.errMsg = fmt.Sprintf("URL resolve failed: %v", err)
@@ -205,8 +220,11 @@ func (p *Player) resolveAndLoad(t *model.Track, myGen uint64) {
 	if loadErr != nil {
 		// Maybe expired cached URL — retry once
 		youtube.InvalidateURL(t.ID)
-		url2, err2 := youtube.ResolveURL(t.ID)
+		url2, err2 := youtube.ResolveURLCtx(ctx, t.ID)
 		if err2 != nil {
+			if ctx.Err() != nil {
+				return
+			}
 			p.state = model.Stopped
 			p.track = nil
 			p.errMsg = fmt.Sprintf("Failed to play: %v", err2)
@@ -235,10 +253,17 @@ func (p *Player) PlayPaused(t *model.Track, seekPos float64) {
 	p.wasPlay = false // don't trigger EOF detection
 	p.resolving = true
 	p.resuming = true // prevent Status() from overriding pause state during resume
+
+	// Kill any in-flight yt-dlp process from a previous resolve
+	if p.resolveCancel != nil {
+		p.resolveCancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	p.resolveCancel = cancel
 	p.mu.Unlock()
 
 	go func() {
-		url, err := youtube.ResolveURL(t.ID)
+		url, err := youtube.ResolveURLCtx(ctx, t.ID)
 
 		p.mu.Lock()
 		if p.gen != myGen {
@@ -248,6 +273,10 @@ func (p *Player) PlayPaused(t *model.Track, seekPos float64) {
 		p.resolving = false
 
 		if err != nil {
+			if ctx.Err() != nil {
+				p.mu.Unlock()
+				return
+			}
 			p.state = model.Stopped
 			p.track = nil
 			p.errMsg = fmt.Sprintf("URL resolve failed: %v", err)
@@ -268,8 +297,12 @@ func (p *Player) PlayPaused(t *model.Track, seekPos float64) {
 		_, loadErr := p.sendCommand("loadfile", url)
 		if loadErr != nil {
 			youtube.InvalidateURL(t.ID)
-			url2, err2 := youtube.ResolveURL(t.ID)
+			url2, err2 := youtube.ResolveURLCtx(ctx, t.ID)
 			if err2 != nil {
+				if ctx.Err() != nil {
+					p.mu.Unlock()
+					return
+				}
 				p.state = model.Stopped
 				p.track = nil
 				p.mu.Unlock()
@@ -480,6 +513,11 @@ func (p *Player) Close() {
 
 	if p.debounceTimer != nil {
 		p.debounceTimer.Stop()
+	}
+	// Kill any in-flight yt-dlp process
+	if p.resolveCancel != nil {
+		p.resolveCancel()
+		p.resolveCancel = nil
 	}
 	if p.conn != nil {
 		p.sendCommand("quit")
