@@ -2,7 +2,7 @@
 
 TUI for YouTube Music with vim keybindings and radio mixes. Built with Go, [Bubble Tea](https://github.com/charmbracelet/bubbletea), and [Lip Gloss](https://github.com/charmbracelet/lipgloss).
 
-Search, queue, playlists, radio mixes, and history. All navigated with vim keybindings (`j/k`, `gg/G`, visual select, yank/delete/paste, undo/redo). Session state persists across launches.
+Search, queue, playlists, artists, radio mixes, and history. All navigated with vim keybindings (`j/k`, `gg/G`, visual select, yank/delete/paste, undo/redo). Session state persists across launches.
 
 Demo:
 
@@ -60,7 +60,7 @@ go build -o vimyt .
 | `Ctrl+d` / `Ctrl+u` | Half-page down / up |
 | `h` / `l` | Navigate back / forward (enter playlists) |
 | `H` / `J` / `K` / `L` | Switch panel focus (left / down / up / right) |
-| `1`-`5` | Jump to panel by number |
+| `1`-`6` | Jump to panel by number |
 | `Alt+h` / `Alt+l` | Cycle panels |
 | `Ctrl+o` / `Ctrl+i` | Jumplist back / forward |
 | `z` | Zoom current panel |
@@ -76,6 +76,7 @@ go build -o vimyt .
 | `g` + time | Seek to time (e.g. `1:23`) |
 | `+` / `-` | Volume up / down |
 | `n` | Next track |
+| `R` | Randomize queue |
 
 ### Editing
 
@@ -96,7 +97,7 @@ go build -o vimyt .
 |---|---|
 | `/` | Search (from any panel) |
 | `f` | Filter current panel |
-| `a` | Add track to playlist |
+| `a` | Add track/playlist to queue or add artist |
 | `F` | Toggle favorite |
 | `r` | Start radio mix from track |
 | `S` | Open settings |
@@ -107,11 +108,11 @@ go build -o vimyt .
 
 Press `S` to open settings:
 
-- Autoplay / Shuffle
+- Autoplay / Shuffle / Loop Track (infinite or x times)
 - Focus Queue on add
 - Relative line numbers
-- Pin Search / Playlist / Radio panels
-- Show/Hide History / Radio History
+- Pin Search / Playlist / Radio / Artists panels
+- Show/Hide History / Radio History / Artists
 - YT Auth -- browser cookie auth (Firefox, Chrome, Chromium, Brave, Edge) for private playlists
 - Import Playlist by URL
 
@@ -127,6 +128,7 @@ Only metadata is stored locally. No audio or video is downloaded. Location depen
   queue.json          # Persisted queue
   play_history.json   # Last 500 played tracks
   radio_history.json  # Last 100 radio mix sessions
+  artists.json        # Followed artists and cached albums
   playlists/          # Playlist JSON files
 ```
 
