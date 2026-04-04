@@ -223,6 +223,7 @@ func (a *App) saveSession() {
 		LoopTrack:      a.loopTrack,
 		LoopCount:      a.loopCount,
 		LoopTotal:      a.loopTotal,
+		Theme:          a.theme.ToMap(),
 	}
 	if a.playlist.radioActive {
 		// Don't save radio as detail level — go back to list

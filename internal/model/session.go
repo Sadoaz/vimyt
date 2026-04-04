@@ -31,22 +31,23 @@ type Session struct {
 	Volume int `json:"volume"` // playback volume 0-100
 
 	// Settings
-	Autoplay       bool   `json:"autoplay"`         // auto-advance to next track when current ends
-	Shuffle        bool   `json:"shuffle"`          // randomize next track selection
-	PinSearch      bool   `json:"pin_search"`       // keep search panel expanded when unfocused
-	PinPlaylist    bool   `json:"pin_playlist"`     // keep playlist detail expanded when unfocused
-	ShowHistory    bool   `json:"show_history"`     // show history panel below playlists
-	ShowRadio      bool   `json:"show_radio"`       // show radio history panel below play history
-	PinRadio       bool   `json:"pin_radio"`        // keep radio history expanded when unfocused
-	RelNumbers     bool   `json:"rel_numbers"`      // show relative line numbers (vim-style)
-	AutoFocusQueue bool   `json:"auto_focus_queue"` // focus queue panel when playing a track
-	CookieBrowser  string `json:"cookie_browser"`   // browser for yt-dlp cookie auth (empty = off)
-	ShowArtists    bool   `json:"show_artists"`     // show artists panel
-	PinArtists     bool   `json:"pin_artists"`      // keep artists expanded when unfocused
-	ArtistsCur     int    `json:"artists_cur"`      // cursor in artists panel
-	LoopTrack      bool   `json:"loop_track"`       // loop current track on EOF
-	LoopCount      int    `json:"loop_count"`       // remaining loops (0 = infinite)
-	LoopTotal      int    `json:"loop_total"`       // original loop count for display
+	Autoplay       bool              `json:"autoplay"`         // auto-advance to next track when current ends
+	Shuffle        bool              `json:"shuffle"`          // randomize next track selection
+	PinSearch      bool              `json:"pin_search"`       // keep search panel expanded when unfocused
+	PinPlaylist    bool              `json:"pin_playlist"`     // keep playlist detail expanded when unfocused
+	ShowHistory    bool              `json:"show_history"`     // show history panel below playlists
+	ShowRadio      bool              `json:"show_radio"`       // show radio history panel below play history
+	PinRadio       bool              `json:"pin_radio"`        // keep radio history expanded when unfocused
+	RelNumbers     bool              `json:"rel_numbers"`      // show relative line numbers (vim-style)
+	AutoFocusQueue bool              `json:"auto_focus_queue"` // focus queue panel when playing a track
+	CookieBrowser  string            `json:"cookie_browser"`   // browser for yt-dlp cookie auth (empty = off)
+	ShowArtists    bool              `json:"show_artists"`     // show artists panel
+	PinArtists     bool              `json:"pin_artists"`      // keep artists expanded when unfocused
+	ArtistsCur     int               `json:"artists_cur"`      // cursor in artists panel
+	LoopTrack      bool              `json:"loop_track"`       // loop current track on EOF
+	LoopCount      int               `json:"loop_count"`       // remaining loops (0 = infinite)
+	LoopTotal      int               `json:"loop_total"`       // original loop count for display
+	Theme          map[string]string `json:"theme,omitempty"`  // custom color theme overrides
 }
 
 func sessionPath() (string, error) {

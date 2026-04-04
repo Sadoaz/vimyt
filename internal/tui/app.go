@@ -101,6 +101,7 @@ type App struct {
 	// Tick counter for marquee animation (incremented every playerTick = 500ms)
 	tickCount int
 	// Settings
+	theme               Theme           // customizable color theme
 	autoplay            bool            // auto-advance to next track on EOF
 	shuffle             bool            // randomize next track selection
 	loopTrack           bool            // loop current track on EOF
@@ -120,6 +121,12 @@ type App struct {
 	settingsImportInput textinput.Model // text input for playlist URL
 	settingsLoopInput   bool            // true when loop count input is active
 	settingsLoopInp     textinput.Model // text input for loop count
+	showColorEditor     bool            // color editor sub-view active
+	colorEditorCur      int             // cursor in color editor
+	colorEditorInput    bool            // text input for color value active
+	colorEditorInp      textinput.Model // text input for color value
+	colorSearching      bool            // true when / search is active in color editor
+	colorFilter         string          // active filter string in color editor
 	importingPlaylist   bool            // true while async import is running
 	// Prefetch: ID and queue index of the track whose URL is being resolved ahead of time.
 	// prefetchNextIdx is used by auto-advance so it plays the same track that was prefetched
@@ -253,6 +260,12 @@ func New(plStore *model.PlaylistStore) App {
 	li.Placeholder = "e.g. 5"
 	li.CharLimit = 6
 	li.Cursor.SetMode(cursor.CursorStatic)
+
+	colInp := textinput.New()
+	colInp.Prompt = "> "
+	colInp.Placeholder = "#ff5733"
+	colInp.CharLimit = 10
+	colInp.Cursor.SetMode(cursor.CursorStatic)
 	hi.Cursor.SetMode(cursor.CursorStatic)
 
 	sessionExists := model.SessionExists()
@@ -342,6 +355,7 @@ func New(plStore *model.PlaylistStore) App {
 		radioHistFilterInput: ri,
 		settingsImportInput:  ii,
 		settingsLoopInp:      li,
+		colorEditorInp:       colInp,
 		radioHistory:         model.LoadRadioHistory(),
 		playHistory:          ph,
 		depErr:               checkDeps(),
@@ -364,6 +378,7 @@ func New(plStore *model.PlaylistStore) App {
 		loopTrack:            sess.LoopTrack,
 		loopCount:            sess.LoopCount,
 		loopTotal:            sess.LoopTotal,
+		theme:                ThemeFromMap(sess.Theme),
 		prefetchNextIdx:      -1,
 	}
 	// Apply cookie browser setting to youtube package
@@ -390,6 +405,7 @@ func New(plStore *model.PlaylistStore) App {
 	app.artistsFilterInp = afi
 	app.artistsPanelCur = sess.ArtistsCur
 	app.artistsPanelCur = min(app.artistsPanelCur, max(app.artistStore.Len()-1, 0))
+	applyTheme(app.theme)
 	return app
 }
 

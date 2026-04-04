@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	// Bottom bar background style
+	// Bottom bar background style — rebuilt by applyTheme
 	sbBgStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("245"))
 )
@@ -19,13 +19,13 @@ var (
 // embedded in the top border line: ╭─ Label ────── hint ─╮
 // width/height are the outer dimensions including border.
 func renderPanel(label, hint, content string, width, height int, focused bool) string {
-	borderColor := lipgloss.Color("240")
-	labelColor := lipgloss.Color("240")
+	borderColor := lipgloss.Color(activeTheme.Unfocused)
+	labelColor := lipgloss.Color(activeTheme.Unfocused)
 	if focused {
-		borderColor = lipgloss.Color("75")
-		labelColor = lipgloss.Color("75")
+		borderColor = lipgloss.Color(activeTheme.Accent)
+		labelColor = lipgloss.Color(activeTheme.Accent)
 	}
-	hintColor := lipgloss.Color("243")
+	hintColor := lipgloss.Color(activeTheme.Dimmed)
 
 	bc := lipgloss.NewStyle().Foreground(borderColor)
 	lc := lipgloss.NewStyle().Foreground(labelColor).Bold(focused)
