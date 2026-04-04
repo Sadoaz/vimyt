@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // helpLines builds the full list of help lines.
@@ -73,20 +74,28 @@ func (a App) renderHelp() string {
 	}
 	b.WriteString("\n\n")
 
+	boxW := min(max(a.width-4, 50), a.width-2)
+	innerW := boxW - 6 // border(2) + padding(4)
+	if innerW < 20 {
+		innerW = 20
+	}
+
 	// Render lines
 	for _, line := range visible {
 		parts := strings.SplitN(line, "\t", 3)
 		if len(parts) == 3 && parts[0] == "" && parts[2] == "" {
 			// Section header
-			b.WriteString("  " + helpHeaderStyle.Render(parts[1]) + "\n")
+			rendered := "  " + helpHeaderStyle.Render(parts[1])
+			b.WriteString(ansi.Truncate(rendered, innerW, "") + "\n")
 		} else if len(parts) == 3 {
-			fmt.Fprintf(&b, "  * %-18s %-24s %s\n",
+			rendered := fmt.Sprintf("  * %-18s %-24s %s",
 				helpKeyStyle.Render(parts[0]),
 				parts[1],
 				helpDescStyle.Render(parts[2]),
 			)
+			b.WriteString(ansi.Truncate(rendered, innerW, "") + "\n")
 		} else {
-			b.WriteString("  " + line + "\n")
+			b.WriteString(ansi.Truncate("  "+line, innerW, "") + "\n")
 		}
 	}
 
@@ -95,7 +104,6 @@ func (a App) renderHelp() string {
 		fmt.Fprintf(&b, "\n  %s", helpDimStyle.Render(fmt.Sprintf("More rows below (%d/%d)", end, len(lines))))
 	}
 
-	boxW := max(a.width-4, 50)
 	box := overlayBorderStyle.Width(boxW).Render(
 		overlayTitleStyle.Render("Help") + "\n" + b.String(),
 	)

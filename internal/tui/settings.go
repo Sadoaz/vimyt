@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/Sadoaz/vimyt/internal/youtube"
 )
@@ -148,10 +149,56 @@ func (a *App) cycleBrowser(dir int) {
 	youtube.SetCookieBrowser(a.cookieBrowser)
 }
 
+// settingsFilteredIndices returns the indices of settings matching the filter.
+func (a *App) settingsFilteredIndices() []int {
+	if a.settingsFilter == "" {
+		indices := make([]int, len(settingsOptions))
+		for i := range settingsOptions {
+			indices[i] = i
+		}
+		return indices
+	}
+	filter := strings.ToLower(a.settingsFilter)
+	var indices []int
+	for i, opt := range settingsOptions {
+		if strings.Contains(strings.ToLower(opt.name), filter) ||
+			strings.Contains(strings.ToLower(opt.desc), filter) {
+			indices = append(indices, i)
+		}
+	}
+	return indices
+}
+
 func (a App) updateSettings(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle color editor sub-view
 	if a.showColorEditor {
 		return a.updateColorEditor(msg)
+	}
+
+	// Handle settings search input
+	if a.settingsSearching {
+		switch {
+		case key.Matches(msg, keys.Quit) && msg.String() == "ctrl+c":
+			a.quit()
+			return a, tea.Quit
+		case key.Matches(msg, keys.Enter):
+			a.settingsFilter = a.settingsFilterInp.Value()
+			a.settingsSearching = false
+			a.settingsFilterInp.Blur()
+			a.settingsCur = 0
+			return a, nil
+		case key.Matches(msg, keys.Escape):
+			a.settingsSearching = false
+			a.settingsFilterInp.Blur()
+			if a.settingsFilterInp.Value() == "" {
+				a.settingsFilter = ""
+			}
+			return a, nil
+		default:
+			var cmd tea.Cmd
+			a.settingsFilterInp, cmd = a.settingsFilterInp.Update(msg)
+			return a, cmd
+		}
 	}
 
 	// Handle import URL input mode
@@ -221,11 +268,18 @@ func (a App) updateSettings(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	filtered := a.settingsFilteredIndices()
+
 	switch {
 	case key.Matches(msg, keys.Quit) && msg.String() == "ctrl+c":
 		a.quit()
 		return a, tea.Quit
 	case key.Matches(msg, keys.Escape), key.Matches(msg, keys.Settings), msg.String() == "q":
+		if a.settingsFilter != "" {
+			a.settingsFilter = ""
+			a.settingsCur = 0
+			return a, nil
+		}
 		a.showSettings = false
 		return a, nil
 	case key.Matches(msg, keys.Up):
@@ -234,64 +288,81 @@ func (a App) updateSettings(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 	case key.Matches(msg, keys.Down):
-		if a.settingsCur < len(settingsOptions)-1 {
+		if a.settingsCur < len(filtered)-1 {
 			a.settingsCur++
 		}
 		return a, nil
 	case key.Matches(msg, keys.HalfDown):
-		a.settingsCur += len(settingsOptions) / 2
-		a.settingsCur = min(a.settingsCur, len(settingsOptions)-1)
+		a.settingsCur += len(filtered) / 2
+		a.settingsCur = min(a.settingsCur, len(filtered)-1)
 		return a, nil
 	case key.Matches(msg, keys.HalfUp):
-		a.settingsCur = max(a.settingsCur-len(settingsOptions)/2, 0)
+		a.settingsCur = max(a.settingsCur-len(filtered)/2, 0)
 		return a, nil
 	case msg.String() == "g":
 		a.settingsCur = 0
 		return a, nil
 	case msg.String() == "G":
-		a.settingsCur = len(settingsOptions) - 1
+		a.settingsCur = len(filtered) - 1
+		return a, nil
+	case msg.String() == "/":
+		a.settingsSearching = true
+		a.settingsFilterInp.SetValue(a.settingsFilter)
+		a.settingsFilterInp.Focus()
 		return a, nil
 	case key.Matches(msg, keys.Enter), key.Matches(msg, keys.Space):
-		if a.settingsCur == 12 { // Colors — open color editor
+		if a.settingsCur >= len(filtered) {
+			return a, nil
+		}
+		realIdx := filtered[a.settingsCur]
+		if realIdx == 12 { // Colors
 			a.showColorEditor = true
 			a.colorEditorCur = 0
 			return a, nil
 		}
-		if a.settingsCur == 14 { // Import Playlist
+		if realIdx == 14 { // Import Playlist
 			a.settingsImporting = true
 			a.settingsImportInput.SetValue("")
 			a.settingsImportInput.Focus()
 			return a, nil
 		}
-		a.toggleSetting(a.settingsCur)
+		a.toggleSetting(realIdx)
 		return a, nil
 	case msg.String() == "l", msg.String() == "right":
-		switch a.settingsCur {
-		case 2: // Loop Track — cycle forward
+		if a.settingsCur >= len(filtered) {
+			return a, nil
+		}
+		realIdx := filtered[a.settingsCur]
+		switch realIdx {
+		case 2:
 			a.toggleSetting(2)
-		case 12: // Colors — open color editor
+		case 12:
 			a.showColorEditor = true
 			a.colorEditorCur = 0
-		case 13: // Auth Browser — cycle forward
+		case 13:
 			a.cycleBrowser(1)
-		case 14: // Import — no-op
-		default: // Boolean settings — turn ON
-			if !a.settingValue(a.settingsCur) {
-				a.toggleSetting(a.settingsCur)
+		case 14:
+		default:
+			if !a.settingValue(realIdx) {
+				a.toggleSetting(realIdx)
 			}
 		}
 		return a, nil
 	case msg.String() == "h", msg.String() == "left":
-		switch a.settingsCur {
-		case 2: // Loop Track — turn off
+		if a.settingsCur >= len(filtered) {
+			return a, nil
+		}
+		realIdx := filtered[a.settingsCur]
+		switch realIdx {
+		case 2:
 			a.loopOff()
-		case 12: // Colors — no-op
-		case 13: // Auth Browser — cycle backward
+		case 12:
+		case 13:
 			a.cycleBrowser(-1)
-		case 14: // Import — no-op
-		default: // Boolean settings — turn OFF
-			if a.settingValue(a.settingsCur) {
-				a.toggleSetting(a.settingsCur)
+		case 14:
+		default:
+			if a.settingValue(realIdx) {
+				a.toggleSetting(realIdx)
 			}
 		}
 		return a, nil
@@ -310,13 +381,42 @@ func (a App) renderSettings() string {
 		return a.renderColorEditor()
 	}
 
+	boxW := min(max(a.width*2/3, 50), a.width-2)
+	innerW := boxW - 6 // border(2) + padding(4)
+	if innerW < 20 {
+		innerW = 20
+	}
+	// Available lines for settings items
+	maxVisible := a.height - 9
+	if maxVisible < 3 {
+		maxVisible = 3
+	}
+
+	filtered := a.settingsFilteredIndices()
+	total := len(filtered)
+
+	// Scroll so cursor is always visible
+	scroll := 0
+	if a.settingsCur >= maxVisible {
+		scroll = a.settingsCur - maxVisible + 1
+	}
+	if scroll > total-maxVisible {
+		scroll = total - maxVisible
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+	end := min(scroll+maxVisible, total)
+
 	var b strings.Builder
 	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
 	actionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("75")).Bold(true)
-	for i, opt := range settingsOptions {
+	for vi := scroll; vi < end; vi++ {
+		realIdx := filtered[vi]
+		opt := settingsOptions[realIdx]
 		var toggle string
-		switch i {
-		case 2: // Loop Track — show ∞ or count
+		switch realIdx {
+		case 2:
 			if !a.loopTrack {
 				toggle = settingsOffStyle.Render("[OFF]")
 			} else if a.loopTotal == 0 {
@@ -324,18 +424,18 @@ func (a App) renderSettings() string {
 			} else {
 				toggle = settingsOnStyle.Render(fmt.Sprintf("[%dx] ", a.loopTotal))
 			}
-		case 12: // Colors — action
+		case 12:
 			toggle = actionStyle.Render("[>>>]")
-		case 13: // Auth Browser — show browser name
+		case 13:
 			if a.cookieBrowser == "" {
 				toggle = settingsOffStyle.Render("[OFF]")
 			} else {
 				toggle = settingsOnStyle.Render(fmt.Sprintf("[%-9s]", a.cookieBrowser))
 			}
-		case 14: // Import Playlist — action, not a toggle
+		case 14:
 			toggle = actionStyle.Render("[>>>]")
 		default:
-			val := a.settingValue(i)
+			val := a.settingValue(realIdx)
 			if val {
 				toggle = settingsOnStyle.Render("[ON] ")
 			} else {
@@ -343,24 +443,31 @@ func (a App) renderSettings() string {
 			}
 		}
 		line := fmt.Sprintf("  %s  %-14s %s", toggle, opt.name, descStyle.Render(opt.desc))
-		if i == a.settingsCur {
+		line = ansi.Truncate(line, innerW, "")
+		if vi == a.settingsCur {
 			line = settingsCurStyle.Render(line)
 		}
 		b.WriteString(line + "\n")
 	}
 
-	// Show loop count input if active
-	if a.settingsLoopInput {
+	// Show inputs or hints
+	if a.settingsSearching {
+		b.WriteString("\n  " + a.settingsFilterInp.View() + "\n")
+		b.WriteString("\n  Enter = search  Esc = cancel")
+	} else if a.settingsLoopInput {
 		b.WriteString("\n  " + a.settingsLoopInp.View() + "\n")
 		b.WriteString("\n  Enter = set count  Esc = cancel")
 	} else if a.settingsImporting {
 		b.WriteString("\n  " + a.settingsImportInput.View() + "\n")
 		b.WriteString("\n  Enter = import  Esc = cancel")
 	} else {
-		b.WriteString("\n  j/k = navigate  ^d/^u = half-page  gg/G = top/bottom  Enter/Space = toggle  Esc/S/q = close")
+		hint := "  j/k  Enter/Space = toggle  / = search  h/l  Esc/S/q = close"
+		if a.settingsFilter != "" {
+			hint = fmt.Sprintf("  filter: %s  Esc = clear", a.settingsFilter)
+		}
+		b.WriteString("\n" + ansi.Truncate(hint, innerW, ""))
 	}
 
-	boxW := max(a.width*2/3, 50)
 	box := overlayBorderStyle.Width(boxW).Render(
 		overlayTitleStyle.Render("Settings") + "\n\n" + b.String(),
 	)
@@ -496,19 +603,35 @@ func (a App) updateColorEditor(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // renderColorEditor renders the color editor sub-view.
 func (a App) renderColorEditor() string {
+	boxW := min(max(a.width*2/3, 50), a.width-2)
+	innerW := boxW - 6
+	if innerW < 20 {
+		innerW = 20
+	}
+	maxLines := a.height - 9
+	if maxLines < 5 {
+		maxLines = 5
+	}
+
 	var b strings.Builder
 	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(a.theme.Dimmed))
 	filtered := a.colorFilteredFields()
+	linesWritten := 0
 
 	for i, idx := range filtered {
+		if linesWritten >= maxLines {
+			break
+		}
 		f := themeFields[idx]
 		val := f.get(&a.theme)
 		swatch := lipgloss.NewStyle().Foreground(lipgloss.Color(val)).Render("██")
 		line := fmt.Sprintf("  %s  %-14s %-10s %s", swatch, f.name, val, descStyle.Render(f.desc))
+		line = ansi.Truncate(line, innerW, "")
 		if i == a.colorEditorCur {
 			line = settingsCurStyle.Render(line)
 		}
 		b.WriteString(line + "\n")
+		linesWritten++
 	}
 
 	if a.colorEditorInput {
@@ -519,14 +642,13 @@ func (a App) renderColorEditor() string {
 			b.WriteString("\n  Enter = apply  Esc = cancel")
 		}
 	} else {
-		hint := "  j/k = navigate  Enter/l = edit  / = search  r = reset  R = reset all  Esc/q = back"
+		hint := "  j/k  Enter/l = edit  / = search  r = reset  R = all  Esc = back"
 		if a.colorFilter != "" {
-			hint = fmt.Sprintf("  j/k = navigate  Enter/l = edit  / = search  r = reset  R = reset all  Esc = clear filter    filter: %s", a.colorFilter)
+			hint = fmt.Sprintf("  filter: %s  Esc = clear", a.colorFilter)
 		}
-		b.WriteString("\n" + descStyle.Render(hint))
+		b.WriteString("\n" + ansi.Truncate(descStyle.Render(hint), innerW, ""))
 	}
 
-	boxW := max(a.width*2/3, 50)
 	box := overlayBorderStyle.Width(boxW).Render(
 		overlayTitleStyle.Render("Colors") + "\n\n" + b.String(),
 	)

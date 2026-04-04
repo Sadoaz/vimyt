@@ -121,6 +121,9 @@ type App struct {
 	settingsImportInput textinput.Model // text input for playlist URL
 	settingsLoopInput   bool            // true when loop count input is active
 	settingsLoopInp     textinput.Model // text input for loop count
+	settingsSearching   bool            // true when / search is active in settings
+	settingsFilter      string          // active filter string in settings
+	settingsFilterInp   textinput.Model // text input for settings search
 	showColorEditor     bool            // color editor sub-view active
 	colorEditorCur      int             // cursor in color editor
 	colorEditorInput    bool            // text input for color value active
@@ -266,6 +269,11 @@ func New(plStore *model.PlaylistStore) App {
 	colInp.Placeholder = "#ff5733"
 	colInp.CharLimit = 10
 	colInp.Cursor.SetMode(cursor.CursorStatic)
+
+	sfInp := textinput.New()
+	sfInp.Prompt = "/"
+	sfInp.CharLimit = 40
+	sfInp.Cursor.SetMode(cursor.CursorStatic)
 	hi.Cursor.SetMode(cursor.CursorStatic)
 
 	sessionExists := model.SessionExists()
@@ -356,6 +364,7 @@ func New(plStore *model.PlaylistStore) App {
 		settingsImportInput:  ii,
 		settingsLoopInp:      li,
 		colorEditorInp:       colInp,
+		settingsFilterInp:    sfInp,
 		radioHistory:         model.LoadRadioHistory(),
 		playHistory:          ph,
 		depErr:               checkDeps(),
