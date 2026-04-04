@@ -91,7 +91,9 @@ func renderNowPlaying(status model.PlayerStatus, width int, favSet map[string]bo
 	}
 	progress = min(progress, 1)
 	filled := int(progress * float64(barWidth))
-	bar := strings.Repeat("━", filled) + strings.Repeat("─", barWidth-filled)
+	barFilledStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(activeTheme.BarFilled))
+	barEmptyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(activeTheme.BarEmpty))
+	bar := barFilledStyle.Render(strings.Repeat("━", filled)) + barEmptyStyle.Render(strings.Repeat("─", barWidth-filled))
 
 	line := prefix + bar + stateStr
 

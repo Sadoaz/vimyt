@@ -65,7 +65,7 @@ func DefaultTheme() Theme {
 		Favorite:         "#ff5f87",
 		Radio:            "#ff87d7",
 		Create:           "#ffaf00",
-		BarFilled:        "#5fafff",
+		BarFilled:        "#ffffff",
 		BarEmpty:         "#444444",
 	}
 }
