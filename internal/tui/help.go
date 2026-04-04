@@ -133,7 +133,7 @@ func (a App) updateHelp(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	lines := helpLines(a.helpFilter)
-	maxH := max(a.height-4, 5)
+	maxH := max(a.height-10, 5)
 	maxScroll := max(len(lines)-maxH, 0)
 
 	switch {

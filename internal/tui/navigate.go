@@ -86,6 +86,9 @@ func (a App) handleEnter() (tea.Model, tea.Cmd) {
 		cmd := a.radioHistRecover()
 		// Radio recover already focuses queue
 		return a, cmd
+	case panelArtists:
+		cmd := a.artistsPanelEnter()
+		return a, cmd
 	case panelPlaylist:
 		if a.playlist.level == levelDetail {
 			// In detail: Enter plays the track under cursor
@@ -123,6 +126,9 @@ func (a App) handleNavForward() (tea.Model, tea.Cmd) {
 			a.playlist.enter()
 		}
 		// In detail view: l does nothing (Enter plays tracks)
+	case panelArtists:
+		cmd := a.artistsPanelEnter()
+		return a, cmd
 	}
 	// Search and Queue have no sub-levels to navigate into
 	return a, nil
@@ -175,6 +181,8 @@ func (a App) handleNavBack() (tea.Model, tea.Cmd) {
 			a.radioHistCur = 0
 			a.radioHistScroll = 0
 		}
+	case panelArtists:
+		a.artistsPanelBack()
 	}
 	return a, nil
 }
@@ -405,6 +413,61 @@ func (a App) handleAddToPlaylist() (tea.Model, tea.Cmd) {
 			a.history.visual = false
 		} else if t := a.history.currentTrack(); t != nil {
 			tracks = append(tracks, *t)
+		}
+
+	case panelArtists:
+		if a.artistsLevel == 0 {
+			return a.handleFollowArtist()
+		}
+		if a.artistsLevel == 1 {
+			// Album list: add all tracks from album to queue
+			if a.artistsPanelLoad || a.artistsPanelCur >= len(a.artistsPanelAlbs) {
+				return a, nil
+			}
+			album := a.artistsPanelAlbs[a.artistsPanelCur]
+			artistIdx := a.artistStoreIdxByName(a.artistsPanelName)
+			if artistIdx >= 0 {
+				for _, sa := range a.artistStore.Artists[artistIdx].Albums {
+					if sa.ID == album.ID && len(sa.Tracks) > 0 {
+						cached := savedAlbumTracksToModel(sa.Tracks)
+						a.saveQueueUndo()
+						a.qdata.Add(cached...)
+						a.queue.cursor = a.qdata.Len() - 1
+						cmd := a.setStatus(fmt.Sprintf("Added %d tracks from \"%s\" to queue", len(cached), album.Title))
+						return a, cmd
+					}
+				}
+			}
+			a.artistsPanelLoad = true
+			a.artistsPanelAlbN = album.Title
+			cmd := a.setStatus(fmt.Sprintf("Fetching \"%s\"...", album.Title))
+			fetchCmd := func() tea.Msg {
+				trks, err := youtube.FetchAlbumTracks(album)
+				return artistAddAlbumMsg{album: album, tracks: trks, err: err}
+			}
+			return a, tea.Batch(cmd, fetchCmd)
+		}
+		if a.artistsLevel == 2 {
+			if a.artistsVisual {
+				lo, hi := a.artistsAnchor, a.artistsPanelCur
+				if lo > hi {
+					lo, hi = hi, lo
+				}
+				for i := lo; i <= hi && i < len(a.artistsPanelTrks); i++ {
+					tracks = append(tracks, a.artistsPanelTrks[i])
+				}
+				a.artistsVisual = false
+			} else if a.artistsPanelCur < len(a.artistsPanelTrks) {
+				tracks = append(tracks, a.artistsPanelTrks[a.artistsPanelCur])
+			}
+			if len(tracks) > 0 {
+				a.saveQueueUndo()
+				a.qdata.Add(tracks...)
+				a.queue.cursor = a.qdata.Len() - 1
+				cmd := a.setStatus(fmt.Sprintf("Added %d tracks to queue", len(tracks)))
+				return a, cmd
+			}
+			return a, nil
 		}
 
 	case panelPlaylist:

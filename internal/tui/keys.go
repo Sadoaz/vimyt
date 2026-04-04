@@ -51,16 +51,18 @@ type keyMap struct {
 	Undo       key.Binding
 	Redo       key.Binding
 
-	FocusSearch key.Binding
-	Zoom        key.Binding
-	Filter      key.Binding
-	Favorite    key.Binding
-	Settings    key.Binding
-	VolumeUp    key.Binding
-	VolumeDown  key.Binding
-	JumpBack    key.Binding
-	JumpFwd     key.Binding
-	Randomize   key.Binding
+	Tab6         key.Binding
+	ArtistAlbums key.Binding
+	FocusSearch  key.Binding
+	Zoom         key.Binding
+	Filter       key.Binding
+	Favorite     key.Binding
+	Settings     key.Binding
+	VolumeUp     key.Binding
+	VolumeDown   key.Binding
+	JumpBack     key.Binding
+	JumpFwd      key.Binding
+	Randomize    key.Binding
 }
 
 var keys = keyMap{
@@ -118,11 +120,11 @@ var keys = keyMap{
 	),
 	Tab4: key.NewBinding(
 		key.WithKeys("4"),
-		key.WithHelp("4", "history panel"),
+		key.WithHelp("4", "artists panel"),
 	),
 	Tab5: key.NewBinding(
 		key.WithKeys("5"),
-		key.WithHelp("5", "radio history panel"),
+		key.WithHelp("5", "history panel"),
 	),
 	TabNext: key.NewBinding(
 		key.WithKeys("alt+l"),
@@ -254,6 +256,14 @@ var keys = keyMap{
 		key.WithHelp("ctrl+r", "redo"),
 	),
 
+	Tab6: key.NewBinding(
+		key.WithKeys("6"),
+		key.WithHelp("6", "radio history panel"),
+	),
+	ArtistAlbums: key.NewBinding(
+		key.WithKeys("A"),
+		key.WithHelp("A", "artist albums"),
+	),
 	FocusSearch: key.NewBinding(
 		key.WithKeys("ctrl+s"),
 		key.WithHelp("ctrl+s", "focus search"),
@@ -328,8 +338,9 @@ func helpSections() []helpSection {
 			{"1", "Search panel", "focus search panel"},
 			{"2", "Playlists panel", "focus playlists panel"},
 			{"3", "Queue panel", "focus queue panel"},
-			{"4", "History panel", "focus play history panel"},
-			{"5", "Radio History", "focus radio history panel"},
+			{"4", "Artists panel", "focus artists panel"},
+			{"5", "History panel", "focus play history panel"},
+			{"6", "Radio History", "focus radio history panel"},
 			{"H/L", "Panel left/right", "move focus left/right"},
 			{"J/K", "Panel down/up", "move focus down/up"},
 			{"M-h/M-l", "Prev/next panel", "cycle through panels"},
@@ -370,6 +381,7 @@ func helpSections() []helpSection {
 			{"e", "Rename playlist", "rename selected playlist"},
 			{"F", "Toggle favorite", "add/remove from favorites"},
 			{"r", "Start radio", "generate radio mix from track"},
+			{"A", "Follow artist", "add track's artist to Artists panel"},
 		}},
 		{"Radio History (panel 5)", []helpEntry{
 			{"Enter", "Recover radio", "restore a previous radio mix"},

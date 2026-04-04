@@ -217,6 +217,12 @@ func (a *App) saveSession() {
 		RelNumbers:     a.relNumbers,
 		AutoFocusQueue: a.autoFocusQueue,
 		CookieBrowser:  a.cookieBrowser,
+		ShowArtists:    a.showArtistsPanel,
+		PinArtists:     a.pinArtists,
+		ArtistsCur:     a.artistsPanelCur,
+		LoopTrack:      a.loopTrack,
+		LoopCount:      a.loopCount,
+		LoopTotal:      a.loopTotal,
 	}
 	if a.playlist.radioActive {
 		// Don't save radio as detail level — go back to list

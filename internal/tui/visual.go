@@ -19,6 +19,8 @@ func (a App) isVisualActive() bool {
 		return a.history.visual
 	case panelRadioHist:
 		return a.radioHistVisual
+	case panelArtists:
+		return a.artistsVisual
 	}
 	return false
 }
@@ -63,6 +65,7 @@ func (a App) updateVisual(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 		key.Matches(msg, keys.Tab3),
 		key.Matches(msg, keys.Tab4),
 		key.Matches(msg, keys.Tab5),
+		key.Matches(msg, keys.Tab6),
 		key.Matches(msg, keys.TabNext),
 		key.Matches(msg, keys.TabPrev),
 		key.Matches(msg, keys.PanelDown),

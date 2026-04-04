@@ -13,6 +13,11 @@ import (
 	"github.com/Sadoaz/vimyt/internal/model"
 )
 
+var (
+	radioNormalStyle = lipgloss.NewStyle().Padding(0, 2)
+	radioCurStyle    = lipgloss.NewStyle().Padding(0, 2).Background(lipgloss.Color("238"))
+)
+
 func (a *App) radioHistSaveUndo() {
 	snapshot := make([]model.RadioHistoryEntry, len(a.radioHistory.Entries))
 	copy(snapshot, a.radioHistory.Entries)
@@ -239,7 +244,7 @@ func (a App) renderRadioHistConstrained(width, height int) string {
 
 	for di := start; di < end; di++ {
 		e := visible[di]
-		date := e.StartedAt.Format("2006-01-02 15:04")
+		lineNum := di + 1
 		isCursor := di == a.radioHistCur && focused
 		isSel := false
 		if a.radioHistVisual && focused {
@@ -249,15 +254,21 @@ func (a App) renderRadioHistConstrained(width, height int) string {
 			}
 			isSel = di >= lo && di <= hi
 		}
+		style := radioNormalStyle
 		prefix := "  "
 		if isCursor {
+			style = radioCurStyle
 			prefix = "> "
+		} else if isSel {
+			style = radioCurStyle
 		}
 		var line string
-		if isCursor || isSel {
-			plain := fmt.Sprintf("%s%s  %s — %s  (%d tracks)",
-				prefix, date, e.SeedTitle, e.SeedArtist, e.TrackCount)
-			rendered := settingsCurStyle.Render(plain)
+		hasBackground := isCursor || isSel
+		if hasBackground {
+			plain := fmt.Sprintf("%2d  %s — %s  (%d tracks)",
+				lineNum, e.SeedTitle, e.SeedArtist, e.TrackCount)
+			content := prefix + plain
+			rendered := style.Render(content)
 			if isCursor && width > 0 {
 				line = marquee(rendered, width, a.tickCount)
 			} else if width > 0 {
@@ -266,15 +277,19 @@ func (a App) renderRadioHistConstrained(width, height int) string {
 				line = rendered
 			}
 		} else {
-			line = fmt.Sprintf("%s%s  %s — %s  (%d tracks)",
-				prefix,
-				durationStyle.Render(date),
+			trackInfo := plCountStyle.Render(fmt.Sprintf("(%d tracks)", e.TrackCount))
+			plain := fmt.Sprintf("%2d  %s — %s  %s",
+				lineNum,
 				e.SeedTitle,
 				artistStyle.Render(e.SeedArtist),
-				e.TrackCount,
+				trackInfo,
 			)
+			content := prefix + plain
+			rendered := style.Render(content)
 			if width > 0 {
-				line = ansi.Truncate(line, width, "…")
+				line = ansi.Truncate(rendered, width, "…")
+			} else {
+				line = rendered
 			}
 		}
 		b.WriteString(line + "\n")

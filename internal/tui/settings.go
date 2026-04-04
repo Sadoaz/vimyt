@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -18,15 +19,18 @@ var settingsOptions = []struct {
 }{
 	{"Autoplay", "Auto-advance to next track when current ends"},        // 0
 	{"Shuffle", "Randomize next track selection"},                       // 1
-	{"Focus Queue", "Auto-focus queue panel when playing a track"},      // 2
-	{"Rel Numbers", "Show relative line numbers (vim-style)"},           // 3
-	{"Pin Search", "Keep search panel expanded when unfocused"},         // 4
-	{"Pin Playlist", "Keep playlist detail expanded when unfocused"},    // 5
-	{"Pin Radio", "Keep radio history expanded when unfocused"},         // 6
-	{"Show History", "Show play history panel below playlists"},         // 7
-	{"Show Radio", "Show radio history panel below play history"},       // 8
-	{"YT Auth", "Use browser cookies to access your private playlists"}, // 9
-	{"Import", "Import playlist from YouTube URL"},                      // 10
+	{"Loop Track", "Replay current track (∞ or x times)"},               // 2
+	{"Focus Queue", "Auto-focus queue panel when playing a track"},      // 3
+	{"Rel Numbers", "Show relative line numbers (vim-style)"},           // 4
+	{"Pin Search", "Keep search panel expanded when unfocused"},         // 5
+	{"Pin Playlist", "Keep playlist detail expanded when unfocused"},    // 6
+	{"Pin Radio", "Keep radio history expanded when unfocused"},         // 7
+	{"Pin Artists", "Keep artists panel expanded when unfocused"},       // 8
+	{"Show History", "Show play history panel below playlists"},         // 9
+	{"Show Radio", "Show radio history panel below play history"},       // 10
+	{"Show Artists", "Show artists panel"},                              // 11
+	{"YT Auth", "Use browser cookies to access your private playlists"}, // 12
+	{"Import", "Import playlist from YouTube URL"},                      // 13
 }
 
 // browserOptions is the cycle for the Auth Browser setting.
@@ -39,20 +43,26 @@ func (a *App) settingValue(idx int) bool {
 	case 1:
 		return a.shuffle
 	case 2:
-		return a.autoFocusQueue
+		return a.loopTrack
 	case 3:
-		return a.relNumbers
+		return a.autoFocusQueue
 	case 4:
-		return a.pinSearch
+		return a.relNumbers
 	case 5:
-		return a.pinPlaylist
+		return a.pinSearch
 	case 6:
-		return a.pinRadio
+		return a.pinPlaylist
 	case 7:
-		return a.showHistory
+		return a.pinRadio
 	case 8:
-		return a.showRadio
+		return a.pinArtists
 	case 9:
+		return a.showHistory
+	case 10:
+		return a.showRadio
+	case 11:
+		return a.showArtistsPanel
+	case 12:
 		return a.cookieBrowser != ""
 	}
 	return false
@@ -68,29 +78,56 @@ func (a *App) toggleSetting(idx int) {
 			a.shufflePlayed = nil
 		}
 	case 2:
-		a.autoFocusQueue = !a.autoFocusQueue
+		// Loop Track: cycle Off → ∞ → input mode
+		if !a.loopTrack {
+			a.loopTrack = true
+			a.loopCount = 0
+			a.loopTotal = 0
+		} else if a.loopTotal == 0 {
+			a.settingsLoopInput = true
+			a.settingsLoopInp.SetValue("")
+			a.settingsLoopInp.Focus()
+		} else {
+			a.loopTrack = false
+			a.loopCount = 0
+			a.loopTotal = 0
+		}
 	case 3:
-		a.relNumbers = !a.relNumbers
+		a.autoFocusQueue = !a.autoFocusQueue
 	case 4:
-		a.pinSearch = !a.pinSearch
+		a.relNumbers = !a.relNumbers
 	case 5:
-		a.pinPlaylist = !a.pinPlaylist
+		a.pinSearch = !a.pinSearch
 	case 6:
-		a.pinRadio = !a.pinRadio
+		a.pinPlaylist = !a.pinPlaylist
 	case 7:
+		a.pinRadio = !a.pinRadio
+	case 8:
+		a.pinArtists = !a.pinArtists
+	case 9:
 		a.showHistory = !a.showHistory
 		if !a.showHistory && a.focusedPanel == panelHistory {
 			a.focusedPanel = panelPlaylist
 		}
-	case 8:
+	case 10:
 		a.showRadio = !a.showRadio
 		if !a.showRadio && a.focusedPanel == panelRadioHist {
 			a.focusedPanel = panelPlaylist
 		}
-	case 9:
-		// Cycle forward through browser options
+	case 11:
+		a.showArtistsPanel = !a.showArtistsPanel
+		if !a.showArtistsPanel && a.focusedPanel == panelArtists {
+			a.focusedPanel = panelPlaylist
+		}
+	case 12:
 		a.cycleBrowser(1)
 	}
+}
+
+func (a *App) loopOff() {
+	a.loopTrack = false
+	a.loopCount = 0
+	a.loopTotal = 0
 }
 
 func (a *App) cycleBrowser(dir int) {
@@ -142,6 +179,38 @@ func (a App) updateSettings(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Handle loop count input mode
+	if a.settingsLoopInput {
+		switch {
+		case key.Matches(msg, keys.Quit) && msg.String() == "ctrl+c":
+			a.quit()
+			return a, tea.Quit
+		case key.Matches(msg, keys.Enter):
+			val := strings.TrimSpace(a.settingsLoopInp.Value())
+			a.settingsLoopInput = false
+			a.settingsLoopInp.Blur()
+			if val == "" {
+				return a, nil
+			}
+			n, err := strconv.Atoi(val)
+			if err != nil || n < 1 {
+				return a, nil
+			}
+			a.loopTrack = true
+			a.loopCount = n
+			a.loopTotal = n
+			return a, nil
+		case key.Matches(msg, keys.Escape):
+			a.settingsLoopInput = false
+			a.settingsLoopInp.Blur()
+			return a, nil
+		default:
+			var cmd tea.Cmd
+			a.settingsLoopInp, cmd = a.settingsLoopInp.Update(msg)
+			return a, cmd
+		}
+	}
+
 	switch {
 	case key.Matches(msg, keys.Quit) && msg.String() == "ctrl+c":
 		a.quit()
@@ -173,7 +242,7 @@ func (a App) updateSettings(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.settingsCur = len(settingsOptions) - 1
 		return a, nil
 	case key.Matches(msg, keys.Enter), key.Matches(msg, keys.Space):
-		if a.settingsCur == 10 { // Import Playlist
+		if a.settingsCur == 13 { // Import Playlist
 			a.settingsImporting = true
 			a.settingsImportInput.SetValue("")
 			a.settingsImportInput.Focus()
@@ -182,13 +251,29 @@ func (a App) updateSettings(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.toggleSetting(a.settingsCur)
 		return a, nil
 	case msg.String() == "l", msg.String() == "right":
-		if a.settingsCur == 9 { // Auth Browser — cycle forward
+		switch a.settingsCur {
+		case 2: // Loop Track — cycle forward
+			a.toggleSetting(2)
+		case 12: // Auth Browser — cycle forward
 			a.cycleBrowser(1)
+		case 13: // Import — no-op
+		default: // Boolean settings — turn ON
+			if !a.settingValue(a.settingsCur) {
+				a.toggleSetting(a.settingsCur)
+			}
 		}
 		return a, nil
 	case msg.String() == "h", msg.String() == "left":
-		if a.settingsCur == 9 { // Auth Browser — cycle backward
+		switch a.settingsCur {
+		case 2: // Loop Track — turn off
+			a.loopOff()
+		case 12: // Auth Browser — cycle backward
 			a.cycleBrowser(-1)
+		case 13: // Import — no-op
+		default: // Boolean settings — turn OFF
+			if a.settingValue(a.settingsCur) {
+				a.toggleSetting(a.settingsCur)
+			}
 		}
 		return a, nil
 	}
@@ -208,13 +293,21 @@ func (a App) renderSettings() string {
 	for i, opt := range settingsOptions {
 		var toggle string
 		switch i {
-		case 9: // Auth Browser — show browser name
+		case 2: // Loop Track — show ∞ or count
+			if !a.loopTrack {
+				toggle = settingsOffStyle.Render("[OFF]")
+			} else if a.loopTotal == 0 {
+				toggle = settingsOnStyle.Render("[∞]  ")
+			} else {
+				toggle = settingsOnStyle.Render(fmt.Sprintf("[%dx] ", a.loopTotal))
+			}
+		case 12: // Auth Browser — show browser name
 			if a.cookieBrowser == "" {
 				toggle = settingsOffStyle.Render("[OFF]")
 			} else {
 				toggle = settingsOnStyle.Render(fmt.Sprintf("[%-9s]", a.cookieBrowser))
 			}
-		case 10: // Import Playlist — action, not a toggle
+		case 13: // Import Playlist — action, not a toggle
 			toggle = actionStyle.Render("[>>>]")
 		default:
 			val := a.settingValue(i)
@@ -231,8 +324,11 @@ func (a App) renderSettings() string {
 		b.WriteString(line + "\n")
 	}
 
-	// Show import URL input if active
-	if a.settingsImporting {
+	// Show loop count input if active
+	if a.settingsLoopInput {
+		b.WriteString("\n  " + a.settingsLoopInp.View() + "\n")
+		b.WriteString("\n  Enter = set count  Esc = cancel")
+	} else if a.settingsImporting {
 		b.WriteString("\n  " + a.settingsImportInput.View() + "\n")
 		b.WriteString("\n  Enter = import  Esc = cancel")
 	} else {

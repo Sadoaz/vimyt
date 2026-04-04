@@ -296,6 +296,27 @@ func (a App) handleYank() tea.Model {
 			}
 			return a
 		}
+	case panelArtists:
+		if a.artistsLevel == 2 {
+			if a.artistsVisual {
+				lo, hi := a.artistsAnchor, a.artistsPanelCur
+				if lo > hi {
+					lo, hi = hi, lo
+				}
+				for i := lo; i <= hi && i < len(a.artistsPanelTrks); i++ {
+					tracks = append(tracks, a.artistsPanelTrks[i])
+				}
+				a.artistsVisual = false
+			} else if a.artistsPanelCur < len(a.artistsPanelTrks) {
+				tracks = append(tracks, a.artistsPanelTrks[a.artistsPanelCur])
+			}
+			// Copy to clipboard only — don't add to queue
+			if len(tracks) > 0 {
+				a.clipboard = tracks
+				a.plClipboard = nil
+			}
+			return a
+		}
 	}
 	if len(tracks) == 0 {
 		return a

@@ -25,6 +25,7 @@ const (
 	panelPlaylist
 	panelHistory
 	panelRadioHist
+	panelArtists
 )
 
 // App is the root Bubble Tea model.
@@ -102,6 +103,9 @@ type App struct {
 	// Settings
 	autoplay            bool            // auto-advance to next track on EOF
 	shuffle             bool            // randomize next track selection
+	loopTrack           bool            // loop current track on EOF
+	loopCount           int             // remaining loops (0 = infinite)
+	loopTotal           int             // original loop count for display
 	pinSearch           bool            // keep search panel expanded when unfocused
 	pinPlaylist         bool            // keep playlist detail expanded when unfocused
 	showHistory         bool            // show history panel below playlists
@@ -114,6 +118,8 @@ type App struct {
 	settingsCur         int             // cursor in settings list
 	settingsImporting   bool            // true when URL input is active in settings
 	settingsImportInput textinput.Model // text input for playlist URL
+	settingsLoopInput   bool            // true when loop count input is active
+	settingsLoopInp     textinput.Model // text input for loop count
 	importingPlaylist   bool            // true while async import is running
 	// Prefetch: ID and queue index of the track whose URL is being resolved ahead of time.
 	// prefetchNextIdx is used by auto-advance so it plays the same track that was prefetched
@@ -121,6 +127,26 @@ type App struct {
 	prefetchedID    string
 	prefetchNextIdx int                // queue index of prefetched track, -1 if none
 	prefetchCancel  context.CancelFunc // cancels the in-flight prefetch goroutine
+	// Artists panel (panel 6)
+	showArtistsPanel bool                   // settings toggle
+	pinArtists       bool                   // keep artists expanded when unfocused
+	artistsLevel     int                    // 0=artist list, 1=album list
+	artistStore      *model.ArtistStore     // persisted list of followed artists
+	artistsPanelCur  int                    // cursor in current level
+	artistsPanelScrl int                    // scroll offset
+	artistsPanelName string                 // selected artist name (when in album level)
+	artistsPanelAlbs []youtube.Album        // albums for selected artist
+	artistsPanelLoad bool                   // loading albums async
+	artistsPanelTrks []model.Track          // tracks for selected album (level 2)
+	artistsPanelAlbN string                 // name of selected album (level 2)
+	artistsUndoStack [][]*model.SavedArtist // undo stack for artist deletions
+	artistsRedoStack [][]*model.SavedArtist // redo stack for artist deletions
+	artistsVisual    bool                   // visual selection active
+	artistsAnchor    int                    // visual selection anchor
+	artistsFilter    string                 // filter string
+	artistsFiltering bool                   // filter input active
+	artistsFilterInp textinput.Model        // filter input
+
 	// Shuffle tracking: set of played track IDs to avoid repeats
 	shufflePlayed map[string]bool
 	// Play-back stack: queue indices of previously played tracks (for Shift+P)
@@ -146,6 +172,20 @@ type radioResultMsg struct {
 // importPlaylistMsg carries results back from async playlist import.
 type importPlaylistMsg struct {
 	name   string
+	tracks []model.Track
+	err    error
+}
+
+// artistAddAlbumMsg is like albumTracksMsg but adds tracks directly to queue.
+type artistAddAlbumMsg struct {
+	album  youtube.Album
+	tracks []model.Track
+	err    error
+}
+
+// albumTracksMsg carries results back from async album track fetch.
+type albumTracksMsg struct {
+	album  youtube.Album
 	tracks []model.Track
 	err    error
 }
@@ -207,6 +247,12 @@ func New(plStore *model.PlaylistStore) App {
 	ii.Placeholder = "https://youtube.com/playlist?list=..."
 	ii.CharLimit = 256
 	ii.Cursor.SetMode(cursor.CursorStatic)
+
+	li := textinput.New()
+	li.Prompt = "Count: "
+	li.Placeholder = "e.g. 5"
+	li.CharLimit = 6
+	li.Cursor.SetMode(cursor.CursorStatic)
 	hi.Cursor.SetMode(cursor.CursorStatic)
 
 	sessionExists := model.SessionExists()
@@ -219,6 +265,7 @@ func New(plStore *model.PlaylistStore) App {
 		sess.ShowRadio = true
 		sess.AutoFocusQueue = true
 		sess.RelNumbers = true
+		sess.ShowArtists = true
 	}
 
 	sm := newSearchModel()
@@ -226,7 +273,7 @@ func New(plStore *model.PlaylistStore) App {
 	pm := newPlaylistModel(plStore)
 
 	v := panel(sess.View)
-	if v < panelSearch || v > panelRadioHist {
+	if v < panelSearch || v > panelArtists {
 		v = panelSearch
 	}
 	// If history panel was focused but is now hidden, redirect to playlists
@@ -235,6 +282,10 @@ func New(plStore *model.PlaylistStore) App {
 	}
 	// If radio history panel was focused but is now hidden, redirect to playlists
 	if v == panelRadioHist && !sess.ShowRadio {
+		v = panelPlaylist
+	}
+	// If artists panel was focused but is now hidden, redirect to playlists
+	if v == panelArtists && !sess.ShowArtists {
 		v = panelPlaylist
 	}
 
@@ -290,6 +341,7 @@ func New(plStore *model.PlaylistStore) App {
 		helpFilterInput:      hi,
 		radioHistFilterInput: ri,
 		settingsImportInput:  ii,
+		settingsLoopInp:      li,
 		radioHistory:         model.LoadRadioHistory(),
 		playHistory:          ph,
 		depErr:               checkDeps(),
@@ -307,6 +359,11 @@ func New(plStore *model.PlaylistStore) App {
 		relNumbers:           sess.RelNumbers,
 		autoFocusQueue:       sess.AutoFocusQueue,
 		cookieBrowser:        sess.CookieBrowser,
+		showArtistsPanel:     sess.ShowArtists,
+		pinArtists:           sess.PinArtists,
+		loopTrack:            sess.LoopTrack,
+		loopCount:            sess.LoopCount,
+		loopTotal:            sess.LoopTotal,
 		prefetchNextIdx:      -1,
 	}
 	// Apply cookie browser setting to youtube package
@@ -320,6 +377,19 @@ func New(plStore *model.PlaylistStore) App {
 	rhVisible, _ := app.radioHistVisible()
 	app.radioHistCur = min(app.radioHistCur, len(rhVisible)-1)
 	app.radioHistCur = max(app.radioHistCur, 0)
+	afi := textinput.New()
+	afi.CharLimit = 40
+	afi.Cursor.SetMode(cursor.CursorStatic)
+
+	// Load artist store
+	as, _ := model.NewArtistStore()
+	if as == nil {
+		as = &model.ArtistStore{}
+	}
+	app.artistStore = as
+	app.artistsFilterInp = afi
+	app.artistsPanelCur = sess.ArtistsCur
+	app.artistsPanelCur = min(app.artistsPanelCur, max(app.artistStore.Len()-1, 0))
 	return app
 }
 
@@ -354,16 +424,36 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The player detects EOF internally and transitions to Stopped.
 		status := a.player.Status()
 
-		// Auto-advance: if player stopped (track ended) and autoplay is enabled.
-		// Use the prefetched track index if available so we play the same track
-		// whose URL was already resolved, avoiding a redundant yt-dlp call.
-		if status.State == model.Stopped && status.Track != nil && a.autoplay {
-			if a.qdata.Len() > 0 {
+		// Auto-advance: if player stopped (track ended).
+		// Loop track takes priority: replay the same track.
+		// Otherwise, advance to next track if autoplay is enabled.
+		if status.State == model.Stopped && status.Track != nil {
+			shouldAdvance := false
+			if a.loopTrack {
+				if a.loopTotal == 0 {
+					// Infinite — replay forever
+					a.playTrack(&a.qdata.Tracks[a.qdata.Current], "queue")
+					a.cancelPrefetch()
+				} else if a.loopCount > 0 {
+					// Replays remaining — replay and decrement
+					a.loopCount--
+					a.playTrack(&a.qdata.Tracks[a.qdata.Current], "queue")
+					a.cancelPrefetch()
+				} else {
+					// loopCount == 0, loopTotal > 0: all replays done — advance, reset for next track
+					a.loopCount = a.loopTotal
+					shouldAdvance = true
+				}
+			} else if a.autoplay {
+				shouldAdvance = true
+			}
+			if shouldAdvance && a.qdata.Len() > 0 {
+				// Use the prefetched track index if available so we play the same track
+				// whose URL was already resolved, avoiding a redundant yt-dlp call.
 				a.pushPrev()
 				var idx int
 				if a.prefetchNextIdx >= 0 && a.prefetchNextIdx < a.qdata.Len() {
 					idx = a.prefetchNextIdx
-					// Keep shuffle state consistent — mark as played
 					if a.shuffle && a.shufflePlayed != nil {
 						a.shufflePlayed[a.qdata.Tracks[idx].ID] = true
 					}
@@ -372,7 +462,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				a.qdata.Current = idx
 				a.playTrack(&a.qdata.Tracks[idx], "queue")
-				a.cancelPrefetch() // reset prefetch after advancing
+				a.cancelPrefetch()
 			}
 		}
 
@@ -484,6 +574,68 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.playlist.listCur = len(a.playlist.store.Playlists) - 1
 		cmd := a.setStatus(fmt.Sprintf("Imported \"%s\" with %d tracks", name, len(msg.tracks)))
 		return a, cmd
+
+	case artistPanelAlbumsMsg:
+		cmd := a.handleArtistPanelAlbumsMsg(msg)
+		return a, cmd
+
+	case artistAddAlbumMsg:
+		a.artistsPanelLoad = false
+		if msg.err != nil {
+			cmd := a.setStatus(fmt.Sprintf("Album fetch failed: %v", msg.err))
+			return a, cmd
+		}
+		if len(msg.tracks) == 0 {
+			cmd := a.setStatus(fmt.Sprintf("No tracks in \"%s\"", msg.album.Title))
+			return a, cmd
+		}
+		// Cache tracks
+		artistIdx := a.artistStoreIdxByName(a.artistsPanelName)
+		if artistIdx >= 0 {
+			saved := modelTracksToSavedAlbum(msg.tracks)
+			a.artistStore.SetAlbumTracks(artistIdx, msg.album.ID, saved)
+		}
+		// Add all to queue
+		a.saveQueueUndo()
+		a.qdata.Add(msg.tracks...)
+		a.queue.cursor = a.qdata.Len() - 1
+		cmd := a.setStatus(fmt.Sprintf("Added %d tracks from \"%s\" to queue", len(msg.tracks), msg.album.Title))
+		return a, cmd
+
+	case albumTracksMsg:
+		a.artistsPanelLoad = false
+		if msg.err != nil {
+			cmd := a.setStatus(fmt.Sprintf("Album fetch failed: %v", msg.err))
+			return a, cmd
+		}
+		if len(msg.tracks) == 0 {
+			cmd := a.setStatus(fmt.Sprintf("No tracks found in \"%s\"", msg.album.Title))
+			return a, cmd
+		}
+		// Cache tracks to disk
+		artistIdx := a.artistStoreIdxByName(a.artistsPanelName)
+		if artistIdx >= 0 {
+			saved := modelTracksToSavedAlbum(msg.tracks)
+			a.artistStore.SetAlbumTracks(artistIdx, msg.album.ID, saved)
+		}
+		// Single track album: play directly instead of entering track list
+		if len(msg.tracks) == 1 {
+			t := msg.tracks[0]
+			a.saveQueueUndo()
+			a.qdata.Add(t)
+			a.queue.cursor = a.qdata.Len() - 1
+			a.qdata.Current = a.qdata.Len() - 1
+			a.playTrack(&a.qdata.Tracks[a.qdata.Current], "artist")
+			cmd := a.setStatus(fmt.Sprintf("Playing: %s", t.Title))
+			return a, cmd
+		}
+		// Multiple tracks: show in artists panel (level 2)
+		a.artistsLevel = 2
+		a.artistsPanelTrks = msg.tracks
+		a.artistsPanelAlbN = msg.album.Title
+		a.artistsPanelCur = 0
+		a.artistsPanelScrl = 0
+		return a, nil
 	}
 
 	// If help overlay is shown, handle navigation/search
@@ -514,6 +666,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		var cmd tea.Cmd
 		a.radioHistFilterInput, cmd = a.radioHistFilterInput.Update(msg)
+		return a, cmd
+	}
+
+	if a.artistsFiltering {
+		if msg, ok := msg.(tea.KeyMsg); ok {
+			return a.updateArtistsFilter(msg)
+		}
+		var cmd tea.Cmd
+		a.artistsFilterInp, cmd = a.artistsFilterInp.Update(msg)
 		return a, cmd
 	}
 

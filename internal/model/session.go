@@ -41,6 +41,12 @@ type Session struct {
 	RelNumbers     bool   `json:"rel_numbers"`      // show relative line numbers (vim-style)
 	AutoFocusQueue bool   `json:"auto_focus_queue"` // focus queue panel when playing a track
 	CookieBrowser  string `json:"cookie_browser"`   // browser for yt-dlp cookie auth (empty = off)
+	ShowArtists    bool   `json:"show_artists"`     // show artists panel
+	PinArtists     bool   `json:"pin_artists"`      // keep artists expanded when unfocused
+	ArtistsCur     int    `json:"artists_cur"`      // cursor in artists panel
+	LoopTrack      bool   `json:"loop_track"`       // loop current track on EOF
+	LoopCount      int    `json:"loop_count"`       // remaining loops (0 = infinite)
+	LoopTotal      int    `json:"loop_total"`       // original loop count for display
 }
 
 func sessionPath() (string, error) {

@@ -34,7 +34,11 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if a.waitingD {
 		a.waitingD = false
 		if msg.String() == "d" {
-			a.handleNormalDelete()
+			if a.focusedPanel == panelArtists {
+				a.artistsPanelDelete()
+			} else {
+				a.handleNormalDelete()
+			}
 			return a, nil
 		}
 		return a, nil
@@ -81,10 +85,10 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.focusedPanel = panelQueue
 		return a, nil
 	case key.Matches(msg, keys.Tab4):
-		if a.showHistory {
+		if a.showArtistsPanel {
 			a.pushJump(a.focusedPanel)
 			a.prevPanel = a.focusedPanel
-			a.focusedPanel = panelHistory
+			a.focusedPanel = panelArtists
 		}
 		return a, nil
 	case key.Matches(msg, keys.TabNext):
@@ -94,6 +98,16 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case panelSearch:
 			a.focusedPanel = panelPlaylist
 		case panelPlaylist:
+			if a.showArtistsPanel {
+				a.focusedPanel = panelArtists
+			} else if a.showHistory {
+				a.focusedPanel = panelHistory
+			} else if a.showRadio {
+				a.focusedPanel = panelRadioHist
+			} else {
+				a.focusedPanel = panelQueue
+			}
+		case panelArtists:
 			if a.showHistory {
 				a.focusedPanel = panelHistory
 			} else if a.showRadio {
@@ -124,16 +138,26 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				a.focusedPanel = panelRadioHist
 			} else if a.showHistory {
 				a.focusedPanel = panelHistory
+			} else if a.showArtistsPanel {
+				a.focusedPanel = panelArtists
 			} else {
 				a.focusedPanel = panelPlaylist
 			}
 		case panelRadioHist:
 			if a.showHistory {
 				a.focusedPanel = panelHistory
+			} else if a.showArtistsPanel {
+				a.focusedPanel = panelArtists
 			} else {
 				a.focusedPanel = panelPlaylist
 			}
 		case panelHistory:
+			if a.showArtistsPanel {
+				a.focusedPanel = panelArtists
+			} else {
+				a.focusedPanel = panelPlaylist
+			}
+		case panelArtists:
 			a.focusedPanel = panelPlaylist
 		case panelPlaylist:
 			a.focusedPanel = panelSearch
@@ -169,6 +193,19 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.radioHistFilterInput.Placeholder = "Filter radio history..."
 			a.radioHistFilterInput.Focus()
 			return a, nil
+		case panelArtists:
+			a.artistsFiltering = true
+			a.artistsFilterInp.SetValue(a.artistsFilter)
+			switch a.artistsLevel {
+			case 0:
+				a.artistsFilterInp.Placeholder = "Filter artists..."
+			case 1:
+				a.artistsFilterInp.Placeholder = "Filter albums..."
+			case 2:
+				a.artistsFilterInp.Placeholder = "Filter tracks..."
+			}
+			a.artistsFilterInp.Focus()
+			return a, nil
 		}
 		return a, nil
 
@@ -187,10 +224,15 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if a.radioHistCur > 0 {
 				a.radioHistCur--
 			}
+		case panelArtists:
+			if a.artistsPanelCur > 0 {
+				a.artistsPanelCur--
+			}
 		}
 		return a, nil
 
 	case key.Matches(msg, keys.Down):
+
 		switch a.focusedPanel {
 		case panelSearch:
 			a.search.moveDown()
@@ -204,6 +246,11 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			visible, _ := a.radioHistVisible()
 			if a.radioHistCur < len(visible)-1 {
 				a.radioHistCur++
+			}
+		case panelArtists:
+			maxIdx := a.artistsPanelMaxIdx()
+			if a.artistsPanelCur < maxIdx {
+				a.artistsPanelCur++
 			}
 		}
 		return a, nil
@@ -225,6 +272,10 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.radioHistCur += halfPage
 			a.radioHistCur = min(a.radioHistCur, len(visible)-1)
 			a.radioHistCur = max(a.radioHistCur, 0)
+		case panelArtists:
+			a.artistsPanelCur += halfPage
+			a.artistsPanelCur = min(a.artistsPanelCur, a.artistsPanelMaxIdx())
+			a.artistsPanelCur = max(a.artistsPanelCur, 0)
 		}
 		return a, nil
 
@@ -242,6 +293,9 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case panelRadioHist:
 			a.radioHistCur -= halfPage
 			a.radioHistCur = max(a.radioHistCur, 0)
+		case panelArtists:
+			a.artistsPanelCur -= halfPage
+			a.artistsPanelCur = max(a.artistsPanelCur, 0)
 		}
 		return a, nil
 
@@ -267,6 +321,11 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if len(visible) > 0 {
 				a.radioHistCur = len(visible) - 1
 			}
+		case panelArtists:
+			maxIdx := a.artistsPanelMaxIdx()
+			if maxIdx >= 0 {
+				a.artistsPanelCur = maxIdx
+			}
 		}
 		return a, nil
 
@@ -285,6 +344,11 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.radioHistVisual = !a.radioHistVisual
 			if a.radioHistVisual {
 				a.radioHistAnchor = a.radioHistCur
+			}
+		case panelArtists:
+			a.artistsVisual = !a.artistsVisual
+			if a.artistsVisual {
+				a.artistsAnchor = a.artistsPanelCur
 			}
 		}
 		return a, nil
@@ -308,6 +372,10 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case panelRadioHist:
 			if a.radioHistVisual {
 				a.radioHistAnchor, a.radioHistCur = a.radioHistCur, a.radioHistAnchor
+			}
+		case panelArtists:
+			if a.artistsVisual {
+				a.artistsAnchor, a.artistsPanelCur = a.artistsPanelCur, a.artistsAnchor
 			}
 		}
 		return a, nil
@@ -396,10 +464,12 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch a.focusedPanel {
 		case panelSearch:
 			// Return to the panel we came from, default to playlist
-			if prev == panelQueue || prev == panelHistory || prev == panelRadioHist {
+			if prev == panelQueue || prev == panelHistory || prev == panelRadioHist || prev == panelArtists {
 				if prev == panelRadioHist && !a.showRadio {
 					a.focusedPanel = panelPlaylist
 				} else if prev == panelHistory && !a.showHistory {
+					a.focusedPanel = panelPlaylist
+				} else if prev == panelArtists && !a.showArtistsPanel {
 					a.focusedPanel = panelPlaylist
 				} else {
 					a.focusedPanel = prev
@@ -408,6 +478,16 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				a.focusedPanel = panelPlaylist
 			}
 		case panelPlaylist:
+			if a.showArtistsPanel {
+				a.focusedPanel = panelArtists
+			} else if a.showHistory {
+				a.focusedPanel = panelHistory
+			} else if a.showRadio {
+				a.focusedPanel = panelRadioHist
+			} else {
+				a.focusedPanel = panelSearch
+			}
+		case panelArtists:
 			if a.showHistory {
 				a.focusedPanel = panelHistory
 			} else if a.showRadio {
@@ -434,10 +514,12 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch a.focusedPanel {
 		case panelSearch:
 			// Return to the panel we came from, default to bottom panels
-			if prev == panelQueue || prev == panelPlaylist || prev == panelHistory || prev == panelRadioHist {
+			if prev == panelQueue || prev == panelPlaylist || prev == panelHistory || prev == panelRadioHist || prev == panelArtists {
 				if prev == panelRadioHist && !a.showRadio {
 					a.focusedPanel = panelPlaylist
 				} else if prev == panelHistory && !a.showHistory {
+					a.focusedPanel = panelPlaylist
+				} else if prev == panelArtists && !a.showArtistsPanel {
 					a.focusedPanel = panelPlaylist
 				} else {
 					a.focusedPanel = prev
@@ -446,16 +528,26 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				a.focusedPanel = panelRadioHist
 			} else if a.showHistory {
 				a.focusedPanel = panelHistory
+			} else if a.showArtistsPanel {
+				a.focusedPanel = panelArtists
 			} else {
 				a.focusedPanel = panelPlaylist
 			}
 		case panelPlaylist:
 			a.focusedPanel = panelSearch
-		case panelHistory:
+		case panelArtists:
 			a.focusedPanel = panelPlaylist
+		case panelHistory:
+			if a.showArtistsPanel {
+				a.focusedPanel = panelArtists
+			} else {
+				a.focusedPanel = panelPlaylist
+			}
 		case panelRadioHist:
 			if a.showHistory {
 				a.focusedPanel = panelHistory
+			} else if a.showArtistsPanel {
+				a.focusedPanel = panelArtists
 			} else {
 				a.focusedPanel = panelPlaylist
 			}
@@ -468,15 +560,13 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		prev := a.prevPanel
 		a.prevPanel = a.focusedPanel
 		switch a.focusedPanel {
-		case panelPlaylist:
-			a.focusedPanel = panelQueue
-		case panelHistory:
-			a.focusedPanel = panelQueue
-		case panelRadioHist:
+		case panelPlaylist, panelArtists, panelHistory, panelRadioHist:
 			a.focusedPanel = panelQueue
 		case panelQueue:
 			// Return to left panel we came from
-			if prev == panelHistory && a.showHistory {
+			if prev == panelArtists && a.showArtistsPanel {
+				a.focusedPanel = panelArtists
+			} else if prev == panelHistory && a.showHistory {
 				a.focusedPanel = panelHistory
 			} else if prev == panelRadioHist && a.showRadio {
 				a.focusedPanel = panelRadioHist
@@ -494,18 +584,16 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch a.focusedPanel {
 		case panelQueue:
 			// Return to left panel we came from
-			if prev == panelHistory && a.showHistory {
+			if prev == panelArtists && a.showArtistsPanel {
+				a.focusedPanel = panelArtists
+			} else if prev == panelHistory && a.showHistory {
 				a.focusedPanel = panelHistory
 			} else if prev == panelRadioHist && a.showRadio {
 				a.focusedPanel = panelRadioHist
 			} else {
 				a.focusedPanel = panelPlaylist
 			}
-		case panelPlaylist:
-			a.focusedPanel = panelQueue
-		case panelHistory:
-			a.focusedPanel = panelQueue
-		case panelRadioHist:
+		case panelPlaylist, panelArtists, panelHistory, panelRadioHist:
 			a.focusedPanel = panelQueue
 		case panelSearch:
 			a.focusedPanel = panelPlaylist
@@ -574,6 +662,10 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	// Follow artist (A) — add artist from track under cursor to Artists panel
+	case key.Matches(msg, keys.ArtistAlbums):
+		return a.handleFollowArtist()
+
 	// Radio (r) — start radio from any track
 	case key.Matches(msg, keys.Radio):
 		return a.handleRadio()
@@ -588,8 +680,17 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.settingsCur = 0
 		return a, nil
 
-	// Radio history (5)
+	// History (5)
 	case key.Matches(msg, keys.Tab5):
+		if a.showHistory {
+			a.pushJump(a.focusedPanel)
+			a.prevPanel = a.focusedPanel
+			a.focusedPanel = panelHistory
+		}
+		return a, nil
+
+	// Radio history (6)
+	case key.Matches(msg, keys.Tab6):
 		if a.showRadio {
 			a.pushJump(a.focusedPanel)
 			a.prevPanel = a.focusedPanel
@@ -628,6 +729,12 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case panelSearch:
 			a.focusedPanel = panelPlaylist
 		case panelPlaylist:
+			if a.showArtistsPanel {
+				a.focusedPanel = panelArtists
+			} else {
+				a.focusedPanel = panelQueue
+			}
+		case panelArtists:
 			a.focusedPanel = panelQueue
 		case panelQueue:
 			if a.showRadio {
@@ -652,8 +759,14 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case panelPlaylist:
 			a.focusedPanel = panelSearch
-		case panelQueue:
+		case panelArtists:
 			a.focusedPanel = panelPlaylist
+		case panelQueue:
+			if a.showArtistsPanel {
+				a.focusedPanel = panelArtists
+			} else {
+				a.focusedPanel = panelPlaylist
+			}
 		case panelRadioHist:
 			a.focusedPanel = panelQueue
 		}
@@ -691,6 +804,13 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Undo
 	case key.Matches(msg, keys.Undo):
+		if a.focusedPanel == panelArtists {
+			if a.artistsUndo() {
+				cmd := a.setStatus("Undo artists")
+				return a, cmd
+			}
+			return a, nil
+		}
 		if a.focusedPanel == panelRadioHist {
 			cmd := a.radioHistPerformUndo()
 			if cmd != nil {
@@ -711,6 +831,13 @@ func (a App) updateNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Redo
 	case key.Matches(msg, keys.Redo):
+		if a.focusedPanel == panelArtists {
+			if a.artistsRedo() {
+				cmd := a.setStatus("Redo artists")
+				return a, cmd
+			}
+			return a, nil
+		}
 		if a.focusedPanel == panelRadioHist {
 			cmd := a.radioHistPerformRedo()
 			if cmd != nil {
@@ -813,6 +940,9 @@ func (a App) updateGotoInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case panelRadioHist:
 				a.radioHistCur = 0
 				a.radioHistScroll = 0
+			case panelArtists:
+				a.artistsPanelCur = 0
+				a.artistsPanelScrl = 0
 			}
 			return a, nil
 		}
@@ -896,6 +1026,8 @@ func (a App) updateColonInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case panelRadioHist:
 				visible, _ := a.radioHistVisible()
 				a.radioHistCur = min(target, len(visible)-1)
+			case panelArtists:
+				a.artistsPanelCur = min(target, a.artistsPanelMaxIdx())
 			}
 		}
 		a.colonActive = false
