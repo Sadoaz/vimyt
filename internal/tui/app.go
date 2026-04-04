@@ -638,6 +638,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// Clear status message on any keypress so it doesn't linger
+	if _, ok := msg.(tea.KeyMsg); ok && a.statusMsg != "" {
+		a.statusMsg = ""
+	}
+
 	// If help overlay is shown, handle navigation/search
 	if a.showHelp {
 		if msg, ok := msg.(tea.KeyMsg); ok {

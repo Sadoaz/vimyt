@@ -508,7 +508,11 @@ func (a App) renderArtistsPanelConstrained(width, height int) string {
 		total := len(filtered)
 		if a.artistStore.Len() == 0 {
 			b.WriteString("  No artists followed.\n")
-			b.WriteString(artistDimStyle.Render("  Press A on a track to follow an artist"))
+			hint := artistDimStyle.Render("  Press A on a track to follow an artist")
+			if width > 0 {
+				hint = ansi.Truncate(hint, width, "")
+			}
+			b.WriteString(hint)
 			return b.String()
 		}
 		if total == 0 {

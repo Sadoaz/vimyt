@@ -93,6 +93,23 @@ func (a *App) handleVisualDelete() {
 	case panelQueue:
 		a.saveQueueUndo()
 		a.queue.deleteVisual(a.qdata)
+	case panelArtists:
+		if a.artistsLevel == 0 && a.artistsVisual {
+			a.saveArtistsUndo()
+			lo, hi := a.artistsAnchor, a.artistsPanelCur
+			if lo > hi {
+				lo, hi = hi, lo
+			}
+			for i := hi; i >= lo && i < a.artistStore.Len(); i-- {
+				a.artistStore.Remove(i)
+			}
+			a.artistsVisual = false
+			if a.artistsPanelCur >= a.artistStore.Len() && a.artistsPanelCur > 0 {
+				a.artistsPanelCur = a.artistStore.Len() - 1
+			}
+		} else {
+			a.artistsVisual = false
+		}
 	case panelPlaylist:
 		if a.playlist.listVisual {
 			// Save all deleted playlists as a single undo entry

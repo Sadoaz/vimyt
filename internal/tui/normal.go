@@ -964,6 +964,25 @@ func parseGotoTime(s string) (int, bool) {
 		if err != nil || n < 0 {
 			return 0, false
 		}
+		// If 3+ digits with no colon, treat last 2 digits as seconds
+		// e.g. "130" = 1:30, "0300" = 3:00, "10230" = 1:02:30
+		if len(parts[0]) >= 3 {
+			sec := n % 100
+			rest := n / 100
+			if sec >= 60 {
+				return 0, false
+			}
+			if rest > 99 {
+				// 5+ digits: H:MM:SS
+				min := rest % 100
+				hr := rest / 100
+				if min >= 60 {
+					return 0, false
+				}
+				return hr*3600 + min*60 + sec, true
+			}
+			return rest*60 + sec, true
+		}
 		return n, true
 	case 2:
 		m, err1 := strconv.Atoi(parts[0])

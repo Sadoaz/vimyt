@@ -365,7 +365,7 @@ func (a App) View() string {
 			playlistH = effectiveBottomH - historyH - radioHistH
 		} else if a.focusedPanel == panelHistory {
 			// History gets the bulk
-			playlistH = plListH
+			playlistH = compactH
 			radioHistH = compactH
 			if radioHistExpanded {
 				radioHistH = effectiveBottomH / 3
@@ -378,7 +378,7 @@ func (a App) View() string {
 			}
 		} else if a.focusedPanel == panelRadioHist || (radioHistExpanded && a.focusedPanel != panelHistory) {
 			// Radio history gets the bulk
-			playlistH = plListH
+			playlistH = compactH
 			historyH = compactH
 			radioHistH = effectiveBottomH - playlistH - historyH
 			if radioHistH < 5 {
@@ -415,7 +415,7 @@ func (a App) View() string {
 			historyH = compactH
 			playlistH = effectiveBottomH - historyH
 		} else if a.focusedPanel == panelHistory {
-			playlistH = plListH
+			playlistH = compactH
 			historyH = effectiveBottomH - playlistH
 			if historyH < 5 {
 				historyH = 5
@@ -446,7 +446,7 @@ func (a App) View() string {
 			}
 			playlistH = effectiveBottomH - radioHistH
 		} else if a.focusedPanel == panelRadioHist || radioHistExpanded {
-			playlistH = plListH
+			playlistH = compactH
 			radioHistH = effectiveBottomH - playlistH
 			if radioHistH < 5 {
 				radioHistH = 5

@@ -210,7 +210,14 @@ func (a App) handleRadio() (tea.Model, tea.Cmd) {
 				seed = &t
 			}
 		}
-		// r in playlist list level does nothing
+	case panelArtists:
+		if a.artistsLevel == 2 {
+			tracks := a.artistsFilteredTracks()
+			if len(tracks) > 0 && a.artistsPanelCur < len(tracks) {
+				t := tracks[a.artistsPanelCur]
+				seed = &t
+			}
+		}
 	}
 
 	if seed == nil {
